@@ -1,0 +1,2559 @@
+import React, { useState, useEffect, useRef } from "react";
+import { motion } from "motion/react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Activity,
+  Moon,
+  Smile,
+  Battery,
+  CheckCircle2,
+  ActivitySquare,
+  Droplets,
+  AlertCircle,
+  Apple,
+  Clock,
+  Utensils,
+  RefreshCcw,
+  Quote,
+  History,
+  Plus,
+  ChevronLeft,
+  Target,
+  Dumbbell,
+  Heart,
+  Globe,
+  Lightbulb,
+  Flame,
+  Coins,
+  Trophy,
+  CalendarDays,
+  Award,
+  Zap,
+  MessageSquare,
+  LogOut,
+  User
+} from "lucide-react";
+import Image from "next/image";
+import { PainMap } from "@/components/PainMap";
+import { SupabaseStatus } from "./SupabaseStatus";
+import { supabase, hasSupabaseConfig, supabaseDebugInfo } from "@/lib/supabase";
+import { t, Language } from "@/lib/i18n";
+import { Athlete, WellnessRecord } from "@/types/database";
+import { parseDateString, getLocalDateString } from "@/lib/utils";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+const getPainLocationLabel = (id: string): string => {
+  const mapping: Record<string, string> = {
+    head_f: "Cabeça (Frontal)",
+    neck_f: "Pescoço (Frontal)",
+    chest: "Peitoral",
+    abs: "Abdômen",
+    shoulder_l_f: "Ombro Esquerdo (Frontal)",
+    shoulder_r_f: "Ombro Direito (Frontal)",
+    biceps_l_f: "Bíceps Esquerdo",
+    biceps_r_f: "Bíceps Direito",
+    forearm_l_f: "Antebraço Esquerdo",
+    forearm_r_f: "Antebraço Direito",
+    hand_l_f: "Mão Esquerda",
+    hand_r_f: "Mão Direita",
+    pelvis_f: "Pelve / Oblíquos",
+    thigh_l_f: "Coxa Esquerda (Anterior)",
+    thigh_r_f: "Coxa Direita (Anterior)",
+    knee_l_f: "Joelho Esquerdo",
+    knee_r_f: "Joelho Direito",
+    calf_l_f: "Canela Esquerda",
+    calf_r_f: "Canela Direita",
+    foot_l_f: "Pé Esquerdo",
+    foot_r_f: "Pé Direito",
+    head_b: "Cabeça (Posterior)",
+    neck_b: "Pescoço (Posterior)",
+    upper_back: "Trapézio / Costas Superior",
+    lats: "Dorsais",
+    lower_back: "Lombar",
+    shoulder_l_b: "Ombro Esquerdo (Posterior)",
+    shoulder_r_b: "Ombro Direito (Posterior)",
+    triceps_l_b: "Tríceps Esquerdo",
+    triceps_r_b: "Tríceps Direito",
+    forearm_l_b: "Antebraço Esquerdo (Posterior)",
+    forearm_r_b: "Antebraço Direito (Posterior)",
+    hand_l_b: "Mão Esquerda (Posterior)",
+    hand_r_b: "Mão Direita (Posterior)",
+    glutes: "Glúteos",
+    hamstring_l_b: "Coxa Esquerda (Posterior)",
+    hamstring_r_b: "Coxa Direita (Posterior)",
+    calf_l_b: "Panturrilha Esquerda",
+    calf_r_b: "Panturrilha Direita",
+    foot_l_b: "Calcanhar Esquerdo",
+    foot_r_b: "Calcanhar Direito",
+  };
+  return mapping[id] || id.replace(/_/g, " ");
+};
+
+const getPainIntensityColor = (level: number): string => {
+  if (level <= 3) return "text-emerald-400";
+  if (level <= 6) return "text-yellow-400";
+  return "text-red-400";
+};
+
+const getOptionsForMetric = (metricId: string, lang: Language) => {
+  const opts = t[lang].options;
+
+  const defaultOptions = [
+    { value: 1, label: opts.veryBad, color: "bg-red-500", emoji: "😫" },
+    { value: 2, label: opts.bad, color: "bg-orange-500", emoji: "🙁" },
+    { value: 3, label: opts.ok, color: "bg-yellow-500", emoji: "😐" },
+    { value: 4, label: opts.good, color: "bg-lime-500", emoji: "🙂" },
+    { value: 5, label: opts.veryGood, color: "bg-emerald-500", emoji: "🤩" },
+  ];
+
+  const sleepHourOptions = [
+    { value: 4, label: "< 5h", color: "bg-red-500", emoji: "🥱" },
+    { value: 6, label: "5-6h", color: "bg-orange-500", emoji: "😪" },
+    { value: 7, label: "7h", color: "bg-yellow-500", emoji: "😌" },
+    { value: 8, label: "8h", color: "bg-lime-500", emoji: "😴" },
+    { value: 9, label: "> 8h", color: "bg-emerald-500", emoji: "🛌" },
+  ];
+
+  const energyOptions = [
+    { value: 1, label: "0-20%", color: "bg-red-500", emoji: "🪫" },
+    { value: 2, label: "20-40%", color: "bg-orange-500", emoji: "🔋" },
+    { value: 3, label: "40-60%", color: "bg-yellow-500", emoji: "🔋" },
+    { value: 4, label: "60-80%", color: "bg-lime-500", emoji: "🔋" },
+    { value: 5, label: "80-100%", color: "bg-emerald-500", emoji: "🔋" },
+  ];
+
+  const stressOptions = [
+    { value: 1, label: opts.high, color: "bg-red-500", emoji: "🤬" },
+    { value: 2, label: opts.medium, color: "bg-orange-500", emoji: "😠" },
+    { value: 3, label: opts.ok, color: "bg-yellow-500", emoji: "😐" },
+    { value: 4, label: opts.low, color: "bg-lime-500", emoji: "🙂" },
+    { value: 5, label: opts.zero, color: "bg-emerald-500", emoji: "😌" },
+  ];
+
+  const hydrationOptions = [
+    { value: 1, label: "< 1L", color: "bg-red-500", emoji: "💧" },
+    { value: 2, label: "1-2L", color: "bg-orange-500", emoji: "💧💧" },
+    { value: 3, label: "2-3L", color: "bg-yellow-500", emoji: "💧💧💧" },
+    { value: 4, label: "3-4L", color: "bg-lime-500", emoji: "🥤" },
+    { value: 5, label: "> 4L", color: "bg-emerald-500", emoji: "🥤🥤" },
+  ];
+
+  const urineColorOptions = [
+    { value: 1, label: lang === "pt" ? "Muito clara" : "Very clear", color: "bg-cyan-200", emoji: "💧" },
+    { value: 2, label: lang === "pt" ? "Clara" : "Clear", color: "bg-yellow-200", emoji: "💧" },
+    { value: 3, label: lang === "pt" ? "Amarelo claro" : "Light yellow", color: "bg-yellow-400", emoji: "🟡" },
+    { value: 4, label: lang === "pt" ? "Amarelo escuro" : "Dark yellow", color: "bg-amber-500", emoji: "🟠" },
+    { value: 5, label: lang === "pt" ? "Âmbar / muito escura" : "Amber / very dark", color: "bg-orange-700", emoji: "🟤" },
+  ];
+
+  const nutritionOptions = [
+    { value: 1, label: opts.veryBad, color: "bg-red-500", emoji: "🍔🍟" },
+    { value: 2, label: opts.bad, color: "bg-orange-500", emoji: "🍕" },
+    { value: 3, label: opts.ok, color: "bg-yellow-500", emoji: "🍝" },
+    { value: 4, label: opts.good, color: "bg-lime-500", emoji: "🥗🍗" },
+    { value: 5, label: opts.veryGood, color: "bg-emerald-500", emoji: "🥑🥦" },
+  ];
+
+  const preTrainingMealOptions = [
+    { value: 1, label: opts.didntEat, color: "bg-red-500", emoji: "🚫" },
+    { value: 2, label: opts.ateLittle, color: "bg-orange-500", emoji: "🤏" },
+    { value: 3, label: opts.ok, color: "bg-yellow-500", emoji: "👍" },
+    { value: 4, label: opts.ateWell, color: "bg-lime-500", emoji: "😋" },
+    { value: 5, label: opts.ateLot, color: "bg-emerald-500", emoji: "🍽️" },
+  ];
+
+  const confidenceOptions = [
+    { value: 1, label: opts.veryLow, color: "bg-red-500", emoji: "📉" },
+    { value: 2, label: opts.lowConf, color: "bg-orange-500", emoji: "😟" },
+    { value: 3, label: opts.ok, color: "bg-yellow-500", emoji: "😐" },
+    { value: 4, label: opts.highConf, color: "bg-lime-500", emoji: "😎" },
+    { value: 5, label: opts.veryHigh, color: "bg-emerald-500", emoji: "🚀" },
+  ];
+
+  const legHeavinessOptions = [
+    { value: 1, label: opts.veryHeavy, color: "bg-red-500", emoji: "🧱" },
+    { value: 2, label: opts.heavy, color: "bg-orange-500", emoji: "🏋️" },
+    { value: 3, label: opts.normal, color: "bg-yellow-500", emoji: "😐" },
+    { value: 4, label: opts.light, color: "bg-lime-500", emoji: "🏃" },
+    { value: 5, label: opts.veryLight, color: "bg-emerald-500", emoji: "🪶" },
+  ];
+
+  const menstrualCycleOptions = [
+    { value: 1, label: opts.menstrual_menstruacao, color: "bg-rose-500", emoji: "🩸" },
+    { value: 2, label: opts.menstrual_folicular, color: "bg-fuchsia-500", emoji: "🌱" },
+    { value: 3, label: opts.menstrual_ovulatoria, color: "bg-purple-500", emoji: "✨" },
+    { value: 4, label: opts.menstrual_lutea, color: "bg-pink-500", emoji: "🌙" },
+  ];
+
+  switch (metricId) {
+    case "sleep_hours":
+      return sleepHourOptions;
+    case "energy":
+      return energyOptions;
+    case "stress":
+      return stressOptions;
+    case "hydration":
+      return hydrationOptions;
+    case "urine_color":
+      return urineColorOptions;
+    case "nutrition":
+      return nutritionOptions;
+    case "pre_training_meal":
+      return preTrainingMealOptions;
+    case "confidence":
+      return confidenceOptions;
+    case "leg_heaviness":
+      return legHeavinessOptions;
+    case "menstrual_cycle":
+      return menstrualCycleOptions;
+    default:
+      return defaultOptions;
+  }
+};
+
+const getMetrics = (lang: Language, gender: "M" | "F" = "M") => {
+  const m = t[lang].metrics;
+  const baseMetrics = [
+    {
+      id: "sleep",
+      label: m.sleep.label,
+      icon: Moon,
+      description: m.sleep.desc,
+    },
+    {
+      id: "sleep_hours",
+      label: m.sleep_hours.label,
+      icon: Clock,
+      description: m.sleep_hours.desc,
+    },
+    {
+      id: "energy",
+      label: m.energy.label,
+      icon: Battery,
+      description: m.energy.desc,
+    },
+    { id: "mood", label: m.mood.label, icon: Smile, description: m.mood.desc },
+    {
+      id: "stress",
+      label: m.stress.label,
+      icon: Activity,
+      description: m.stress.desc,
+    },
+    {
+      id: "hydration",
+      label: m.hydration.label,
+      icon: Droplets,
+      description: m.hydration.desc,
+    },
+    {
+      id: "urine_color",
+      label: lang === "pt" ? "Qual a cor da sua urina hoje?" : "What is the color of your urine today?",
+      icon: Droplets,
+      description: lang === "pt" ? "Indica o nível de hidratação." : "Indicates hydration level.",
+    },
+    {
+      id: "nutrition",
+      label: m.nutrition.label,
+      icon: Apple,
+      description: m.nutrition.desc,
+    },
+    {
+      id: "pre_training_meal",
+      label: m.pre_training_meal.label,
+      icon: Utensils,
+      description: m.pre_training_meal.desc,
+    },
+    {
+      id: "training_recovery",
+      label: m.training_recovery.label,
+      icon: RefreshCcw,
+      description: m.training_recovery.desc,
+    },
+    {
+      id: "confidence",
+      label: m.confidence.label,
+      icon: Target,
+      description: m.confidence.desc,
+    },
+    {
+      id: "leg_heaviness",
+      label: m.leg_heaviness.label,
+      icon: Dumbbell,
+      description: m.leg_heaviness.desc,
+    },
+    {
+      id: "overall_wellbeing",
+      label: m.overall_wellbeing.label,
+      icon: Heart,
+      description: m.overall_wellbeing.desc,
+    },
+  ];
+
+  return baseMetrics;
+};
+
+const motivationalQuotes = [
+  {
+    text: "Eu errei mais de 9.000 arremessos na minha carreira. Perdi quase 300 jogos... E é por isso que eu tive sucesso.",
+    author: "Michael Jordan",
+  },
+  {
+    text: "Odiar perder é mais importante do que amar ganhar.",
+    author: "Ayrton Senna",
+  },
+  {
+    text: "Você não pode colocar um limite em nada. Quanto mais você sonha, mais longe você chega.",
+    author: "Michael Phelps",
+  },
+  {
+    text: "Eu odiava cada minuto dos treinos, mas dizia: 'Não desista. Sofra agora e viva o resto de sua vida como um campeão'.",
+    author: "Muhammad Ali",
+  },
+  {
+    text: "Eu treinei 4 anos para correr 9 segundos. Tem gente que não vê resultados em 2 meses e desiste.",
+    author: "Usain Bolt",
+  },
+  {
+    text: "Para ser um campeão, você tem que acreditar em si mesmo quando ninguém mais acredita.",
+    author: "Sugar Ray Robinson",
+  },
+  {
+    text: "A vontade de se preparar tem que ser maior do que a vontade de vencer.",
+    author: "Bob Knight",
+  },
+  {
+    text: "Se você não tem confiança, você sempre encontrará uma maneira de não vencer.",
+    author: "Carl Lewis",
+  },
+  {
+    text: "A excelência não é um ato singular, mas um hábito. Você é o que você faz repetidamente.",
+    author: "Shaquille O'Neal",
+  },
+  {
+    text: "Sempre acreditei que se você colocar o trabalho, os resultados virão.",
+    author: "Michael Jordan",
+  },
+];
+
+type ViewState = "history" | "questionnaire" | "summary" | "cycle" | "cycle_setup";
+
+interface AthleteDashboardProps {
+  onBack: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  athleteId?: string;
+  athleteGender?: 'M' | 'F';
+}
+
+export function AthleteDashboard({ 
+  onBack, 
+  onDirtyChange,
+  athleteId,
+  athleteGender = "F"
+}: AthleteDashboardProps) {
+  console.log("AthleteDashboard rendered with athleteId:", athleteId);
+  const [lang, setLang] = useState<Language>("pt");
+  const [view, setView] = useState<ViewState>("history");
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState("");
+  const [painMap, setPainMap] = useState<
+    Record<string, { level: number; type: string }>
+  >({});
+  const [menstrualSymptoms, setMenstrualSymptoms] = useState<string[]>([]);
+  const [symptoms, setSymptoms] = useState<Record<string, number>>({
+    headache: 0,
+    dizziness: 0,
+    nausea: 0,
+    fatigue_extreme: 0,
+    general_malaise: 0
+  });
+  const [hasSymptomsReport, setHasSymptomsReport] = useState<boolean | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const [quote, setQuote] = useState(motivationalQuotes[0]);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [latestPainMap, setLatestPainMap] = useState<Record<string, { level: number; type: string }>>({});
+  const [athleteData, setAthleteData] = useState<Athlete | null>(null);
+  const [loadingAthlete, setLoadingAthlete] = useState(true);
+  const [athleteCode, setAthleteCode] = useState<string | null>(null);
+  const [xp, setXp] = useState(0);
+  const [coins, setCoins] = useState(0);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
+  const [setupCycleLength, setSetupCycleLength] = useState(28);
+
+  const isMounted = useRef(false);
+  useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
+    const hasAnswers = Object.keys(answers).length > 0;
+    const hasPain = Object.keys(painMap).length > 0;
+    const hasNotes = notes.length > 0;
+    
+    if (view === "questionnaire" || view === "cycle") {
+      onDirtyChange?.(hasAnswers || hasPain || hasNotes);
+    } else {
+      onDirtyChange?.(false);
+    }
+  }, [answers, painMap, notes, view, onDirtyChange]);
+
+  // Use props for athlete identity and gender
+  const theme = {
+    text: athleteGender === "M" ? "text-indigo-400" : "text-rose-400",
+    bg: athleteGender === "M" ? "bg-indigo-500" : "bg-rose-500",
+    bgAlpha: athleteGender === "M" ? "bg-indigo-500/20" : "bg-rose-500/20",
+    border: athleteGender === "M" ? "border-indigo-500/30" : "border-rose-500/30",
+    borderAlpha: athleteGender === "M" ? "border-indigo-500/10" : "border-rose-500/10",
+    ring: athleteGender === "M" ? "ring-indigo-500" : "ring-rose-500",
+    shadow: athleteGender === "M" ? "shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "shadow-[0_0_15px_rgba(244,63,94,0.2)]",
+    shadowStrong: athleteGender === "M" ? "shadow-[0_0_20px_rgba(99,102,241,0.3)]" : "shadow-[0_0_20px_rgba(244,63,94,0.3)]",
+    gradientFrom: athleteGender === "M" ? "from-indigo-500/10" : "from-rose-500/10",
+    gradientVia: athleteGender === "M" ? "via-purple-500" : "via-pink-500",
+    gradientTo: athleteGender === "M" ? "to-indigo-500" : "to-rose-500",
+    icon: athleteGender === "M" ? "text-indigo-300" : "text-rose-300",
+    button: athleteGender === "M" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-rose-600 hover:bg-rose-500",
+  };
+
+  // Set random quote
+  useEffect(() => {
+    setQuote(
+      motivationalQuotes[
+        Math.floor(Math.random() * motivationalQuotes.length)
+      ],
+    );
+  }, [view]);
+
+  // Fetch history and athlete data
+  const fetchData = React.useCallback(async () => {
+    if (!athleteId || !supabase) {
+      console.warn("fetchData called without athleteId or supabase");
+      return;
+    }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    
+    setLoadingHistory(true);
+    setLoadingAthlete(true);
+    if (hasSupabaseConfig && supabase) {
+      try {
+        console.log("Fetching data for athleteId:", athleteId);
+        let historyResponse = await supabase
+          .from("check_ins")
+          .select("id, created_at, record_date, readiness_score")
+          .eq("athlete_id", athleteId)
+          .order("created_at", { ascending: false })
+          .limit(10)
+          .abortSignal(controller.signal);
+
+        // Fallback if record_date column doesn't exist yet
+        if (historyResponse.error && historyResponse.error.code === '42703') {
+          console.warn("record_date column not found, falling back to created_at");
+          historyResponse = await supabase
+            .from("check_ins")
+            .select("id, created_at, readiness_score")
+            .eq("athlete_id", athleteId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+            .abortSignal(controller.signal);
+        }
+
+        const athleteResponse = await supabase
+            .from("athletes")
+            .select("id, name, nickname, avatar_url, birth_date, last_period_date, cycle_length, is_menstruating, xp, coins")
+            .eq("id", athleteId)
+            .single()
+            .abortSignal(controller.signal);
+
+        clearTimeout(timeoutId);
+
+        if (historyResponse.error) {
+          console.error("History fetch error:", historyResponse.error);
+          const err = historyResponse.error;
+          console.error("History fetch error details:", JSON.stringify({
+            message: err.message,
+            code: err.code,
+            details: err.details,
+            hint: err.hint
+          }, null, 2));
+        } else if (historyResponse.data) {
+          console.log("History data fetched:", historyResponse.data.length, "records");
+          setHistoryData(historyResponse.data);
+          
+          // Fetch pain reports for the latest check-in
+          if (historyResponse.data.length > 0) {
+            const latestId = historyResponse.data[0].id;
+            const { data: painData, error: painError } = await supabase
+              .from("pain_reports")
+              .select("body_part_id, pain_level, pain_type")
+              .eq("check_in_id", latestId)
+              .limit(100)
+              .abortSignal(controller.signal);
+            
+            if (!painError && painData) {
+              const mappedPain: Record<string, { level: number; type: string }> = {};
+              painData.forEach((p: any) => {
+                mappedPain[p.body_part_id] = { level: p.pain_level, type: p.pain_type || "acute" };
+              });
+              setLatestPainMap(mappedPain);
+            }
+          }
+        }
+
+        if (athleteResponse.error) {
+          console.error("Athlete fetch error (full object):", athleteResponse.error);
+          console.error("Athlete fetch error message:", athleteResponse.error?.message);
+          console.error("Athlete fetch error code:", athleteResponse.error?.code);
+          console.error("Athlete fetch error details:", athleteResponse.error?.details);
+          console.error("Athlete fetch error hint:", athleteResponse.error?.hint);
+        } else if (athleteResponse.data) {
+          console.log("Athlete data fetched:", athleteResponse.data);
+          setXp(athleteResponse.data.xp || 0);
+          setCoins(athleteResponse.data.coins || 0);
+          setAthleteCode(athleteResponse.data.athlete_code);
+          setAthleteData(athleteResponse.data);
+        } else {
+          console.warn("No athlete data found for ID:", athleteId);
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch data in AthleteDashboard:", err);
+        if (err.name === 'AbortError') {
+          console.error("Fetch timed out after 30 seconds");
+        }
+      }
+    }
+    setLoadingHistory(false);
+    setLoadingAthlete(false);
+  }, [athleteId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleSelect = (metricId: string, value: number) => {
+    setAnswers((prev) => ({ ...prev, [metricId]: value }));
+  };
+
+  const handleSaveCycleSetup = async () => {
+    if (!supabase) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('athletes')
+        .update({
+          last_period_date: setupLastPeriod,
+          cycle_length: setupCycleLength,
+          is_menstruating: false
+        })
+        .eq('id', athleteId);
+      
+      if (error) {
+        console.error("Supabase error saving cycle setup:", error);
+        throw error;
+      }
+      
+      // Refresh data
+      await fetchData();
+      setView("history");
+    } catch (err: any) {
+      console.error("Error saving cycle setup:", err);
+      alert(lang === "pt" 
+        ? `Erro ao salvar configuração: ${err.message || "Verifique se as colunas existem no banco de dados."}`
+        : `Error saving setup: ${err.message || "Check if columns exist in the database."}`
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const metrics = getMetrics(lang, athleteGender).filter(m => m.id !== 'menstrual_cycle');
+  const isComplete = metrics.every((m) => answers[m.id] !== undefined);
+
+  // Menstrual Cycle Helpers
+  const calculateCycleInfo = () => {
+    if (athleteGender !== "F" || !athleteData?.last_period_date) return null;
+
+    const lastPeriod = parseDateString(athleteData.last_period_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    lastPeriod.setHours(0, 0, 0, 0);
+    
+    const diffTime = Math.abs(today.getTime() - lastPeriod.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const cycleLength = athleteData.cycle_length || 28;
+    
+    // Normalize day within cycle
+    const currentDay = ((diffDays - 1) % cycleLength) + 1;
+    
+    let phase = "";
+    let phaseKey = "";
+    
+    // If athlete explicitly reported they are menstruating, override the phase
+    if (athleteData.is_menstruating) {
+      phase = lang === "pt" ? "Menstrual" : "Menstrual";
+      phaseKey = "menstrual";
+    } else if (currentDay <= 5) {
+      phase = lang === "pt" ? "Menstrual" : "Menstrual";
+      phaseKey = "menstrual";
+    } else if (currentDay <= 13) {
+      phase = lang === "pt" ? "Folicular" : "Follicular";
+      phaseKey = "follicular";
+    } else if (currentDay <= 15) {
+      phase = lang === "pt" ? "Ovulatória" : "Ovulatory";
+      phaseKey = "ovulatory";
+    } else {
+      phase = lang === "pt" ? "Lútea" : "Luteal";
+      phaseKey = "luteal";
+    }
+
+    const nextPeriodDays = cycleLength - currentDay;
+    const isLate = diffDays > cycleLength && !athleteData.is_menstruating;
+
+    return { currentDay, phase, phaseKey, nextPeriodDays, isLate, cycleLength };
+  };
+
+  const calculateDetailedAge = (birthDate?: string) => {
+    if (!birthDate) return null;
+    const birth = new Date(birthDate);
+    const today = new Date();
+    
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    let days = today.getDate() - birth.getDate();
+    
+    if (days < 0) {
+      months--;
+      const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      days += lastMonth.getDate();
+    }
+    
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    
+    return { years, months, days };
+  };
+
+  const cycleInfo = calculateCycleInfo();
+
+  const handleStartCycle = async () => {
+    if (!supabase || !athleteId) return;
+    
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+    
+    const { error } = await supabase
+      .from("athletes")
+      .update({ 
+        last_period_date: today,
+        is_menstruating: true 
+      })
+      .eq("id", athleteId);
+    
+    if (!error) {
+      setAthleteData({ ...athleteData, last_period_date: today, is_menstruating: true });
+      // Also save a record of this
+      await supabase.from("wellness_records").insert([{
+        athlete_id: athleteId,
+        record_date: today,
+        comments: lang === "pt" ? "Início do ciclo menstrual relatado." : "Start of menstrual cycle reported.",
+        menstrual_cycle: "Menstrual"
+      }]);
+    }
+  };
+
+  const toggleMenstrualSymptom = (id: string) => {
+    setMenstrualSymptoms(prev => 
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
+
+  // Calculate readiness score (0-100)
+  const calculateReadiness = () => {
+    let totalScore = 0;
+    let maxScore = 0;
+
+    Object.entries(answers).forEach(([key, value]) => {
+      if (key === "sleep_hours") {
+        const normalized = value <= 4 ? 1 : value >= 9 ? 5 : value - 3;
+        totalScore += normalized;
+      } else {
+        totalScore += value;
+      }
+      maxScore += 5;
+    });
+
+    const painValues = Object.values(painMap).map((p) => p.level);
+    const maxPain = painValues.length > 0 ? Math.max(...painValues) : 0;
+    const painDeduction = maxPain * 2;
+
+    if (maxScore === 0) return 100;
+
+    return Math.max(
+      0,
+      Math.round((totalScore / maxScore) * 100) - painDeduction,
+    );
+  };
+
+  const readiness = calculateReadiness();
+
+  const calculateStreak = () => {
+    if (!historyData || historyData.length === 0) return 0;
+
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let currentDate = new Date(today);
+
+    const hasToday = historyData.some((record) => {
+      const recordDate = parseDateString(record.record_date || record.created_at);
+      recordDate.setHours(0, 0, 0, 0);
+      return recordDate.getTime() === today.getTime();
+    });
+
+    if (!hasToday) {
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+
+    for (let i = 0; i < 30; i++) {
+      const found = historyData.some((record) => {
+        const recordDate = parseDateString(record.record_date || record.created_at);
+        recordDate.setHours(0, 0, 0, 0);
+        return recordDate.getTime() === currentDate.getTime();
+      });
+
+      if (found) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  };
+
+  const getTips = () => {
+    const tips = [];
+    const adv = t[lang].advice;
+
+    if (answers["hydration"] && answers["hydration"] <= 2)
+      tips.push(adv.hydrationLow);
+    if (answers["sleep_hours"] && answers["sleep_hours"] <= 6)
+      tips.push(adv.sleepLow);
+    if (answers["nutrition"] && answers["nutrition"] <= 2)
+      tips.push(adv.nutritionLow);
+    if (answers["stress"] && answers["stress"] <= 2) tips.push(adv.stressHigh);
+    if (answers["energy"] && answers["energy"] <= 2) tips.push(adv.energyLow);
+    if (answers["training_recovery"] && answers["training_recovery"] <= 2)
+      tips.push(adv.recoveryLow);
+
+    return tips;
+  };
+
+  const handleSubmit = async () => {
+    if (!isComplete) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    console.log("Submitting wellness check-in for athleteId:", athleteId);
+
+    if (!hasSupabaseConfig || !supabase) {
+      setSubmitError(
+        `Erro de Configuração. URL preenchida: ${supabaseDebugInfo.hasUrl ? "Sim" : "Não"} (Início: ${supabaseDebugInfo.urlStart}, Válida: ${supabaseDebugInfo.isUrlValid ? "Sim" : "Não"}). Chave preenchida: ${supabaseDebugInfo.hasKey ? "Sim" : "Não"}. Verifique as variáveis no Vercel (Production) e faça um redeploy sem cache.`,
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const getLocalDateString = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      const localDateStr = getLocalDateString();
+
+      const checkInDataToInsert: any = {
+        athlete_id: athleteId,
+        record_date: localDateStr,
+        sleep_quality: answers["sleep"],
+        stress_level: answers["stress"],
+        muscle_soreness: answers["leg_heaviness"], // Corrected from mood
+        energy_level: answers["energy"],
+        readiness_score: readiness,
+        menstrual_cycle: cycleInfo?.phase || null,
+        menstrual_symptoms: (cycleInfo?.phaseKey === 'menstrual' && menstrualSymptoms.length > 0) ? menstrualSymptoms : null,
+        notes: notes.trim() || null,
+        hydration: answers["hydration"],
+        nutrition: answers["nutrition"],
+        mood: answers["mood"],
+        sleep_hours: answers["sleep_hours"],
+        pre_training_meal: answers["pre_training_meal"],
+        training_recovery: answers["training_recovery"],
+        confidence: answers["confidence"],
+        leg_heaviness: answers["leg_heaviness"],
+        overall_wellbeing: answers["overall_wellbeing"]
+      };
+
+      console.log("Inserting check-in data:", checkInDataToInsert);
+
+      let checkInData;
+      let checkInError;
+
+      const response = await supabase
+        .from("check_ins")
+        .insert([checkInDataToInsert])
+        .select();
+      
+      checkInData = response.data;
+      checkInError = response.error;
+
+      if (checkInError && checkInError.code === '42703') {
+        console.warn("record_date column not found, retrying insert without it");
+        delete checkInDataToInsert.record_date;
+        const retryResponse = await supabase
+          .from("check_ins")
+          .insert([checkInDataToInsert])
+          .select();
+        
+        checkInData = retryResponse.data;
+        checkInError = retryResponse.error;
+      }
+
+      if (checkInError) throw checkInError;
+
+      // Also save to the new wellness_records table
+      const wellnessData: Partial<WellnessRecord> = {
+        athlete_id: athleteId,
+        record_date: localDateStr,
+        sleep_hours: answers["sleep_hours"] || 8,
+        sleep_quality: answers["sleep"] || null,
+        fatigue_level: answers["energy"] ? (6 - answers["energy"]) : null, // Invert energy to get fatigue
+        muscle_soreness: answers["leg_heaviness"] || null, // Corrected from mood
+        soreness_location: Object.keys(painMap).length > 0 ? JSON.stringify(
+          Object.entries(painMap).map(([region, data]) => ({
+            region,
+            intensity: data.level,
+            type: data.type
+          }))
+        ) : null,
+        stress_level: answers["stress"] || null,
+        readiness_score: readiness,
+        comments: notes.trim() || null,
+        hydration_perception: answers["hydration"] || null, // Corrected to numeric
+        hydration_score: answers["hydration"] ? answers["hydration"] * 20 : null, // 1-5 scale to 0-100
+        urine_color: answers["urine_color"] || null,
+        symptoms: hasSymptomsReport ? symptoms : {},
+        menstrual_cycle: cycleInfo?.phase || null,
+        menstrual_symptoms: (cycleInfo?.phaseKey === 'menstrual' && menstrualSymptoms.length > 0) ? menstrualSymptoms : null
+      };
+
+      console.log("Inserting wellness data:", wellnessData);
+
+      const { error: wellnessError } = await supabase.from("wellness_records").insert([wellnessData]);
+      if (wellnessError) {
+        console.error("Error saving to wellness_records:", wellnessError);
+        throw wellnessError; // Throw so user sees the error
+      }
+
+      if (checkInData && Object.keys(painMap).length > 0) {
+        const painInserts = Object.entries(painMap).map(
+          ([bodyPartId, data]) => ({
+            check_in_id: checkInData[0].id,
+            athlete_id: athleteId,
+            body_part_id: bodyPartId,
+            pain_level: data.level,
+            pain_type: data.type,
+          }),
+        );
+
+        const { error: painError } = await supabase
+          .from("pain_reports")
+          .insert(painInserts);
+        
+        if (painError) throw painError;
+      }
+
+      // Update athlete gamification stats
+      if (athleteData) {
+        const earnedXp = 50;
+        const earnedCoins = 50;
+        const { error: updateError } = await supabase
+          .from("athletes")
+          .update({
+            xp: (athleteData.xp || 0) + earnedXp,
+            coins: (athleteData.coins || 0) + earnedCoins,
+          })
+          .eq("id", athleteId);
+
+        if (updateError) {
+          console.error(
+            "Failed to update athlete gamification stats:",
+            updateError,
+          );
+          // Non-fatal error, we can proceed
+        } else {
+          // Update local state so it reflects immediately
+          setAthleteData({
+            ...athleteData,
+            xp: (athleteData.xp || 0) + earnedXp,
+            coins: (athleteData.coins || 0) + earnedCoins,
+          });
+        }
+      }
+
+      // Refresh history data
+      console.log("Refreshing history data after submit...");
+      await fetchData();
+    } catch (error: any) {
+      console.error("Error saving to Supabase:", error);
+      // Detailed error logging for debugging
+      if (error && typeof error === 'object') {
+        console.error("Error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+      }
+      
+      setSubmitError(
+        error.message ||
+          "Erro ao salvar no banco de dados. Verifique o console.",
+      );
+      setIsSubmitting(false);
+      return; // Stop submission if there's an error
+    }
+
+    onDirtyChange?.(false);
+    setIsSubmitting(false);
+    setView("summary");
+  };
+
+  const resetForm = () => {
+    setAnswers({});
+    setSymptoms({
+      headache: 0,
+      dizziness: 0,
+      nausea: 0,
+      fatigue_extreme: 0,
+      general_malaise: 0
+    });
+    setHasSymptomsReport(null);
+    setPainMap({});
+    setNotes("");
+    setView("history");
+  };
+
+  const toggleLang = () => {
+    setLang((prev) => (prev === "pt" ? "en" : "pt"));
+  };
+
+  if (view === "cycle_setup") {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-md mx-auto space-y-8 pb-12"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => setView("history")}
+            className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" />
+            {t[lang].back}
+          </Button>
+        </div>
+
+        <div className="text-center space-y-4">
+          <div className="p-4 bg-rose-500/20 rounded-full w-20 h-20 mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
+            <CalendarDays className="w-10 h-10 text-rose-400" />
+          </div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-wider">
+            {lang === "pt" ? "Configurar Ciclo" : "Setup Cycle"}
+          </h2>
+          <p className="text-slate-400 font-medium">
+            {lang === "pt" 
+              ? "Informe os dados para automatizarmos seu acompanhamento."
+              : "Provide data to automate your tracking."}
+          </p>
+        </div>
+
+        <Card className="bg-[#0A1120] border-slate-800 shadow-2xl overflow-hidden">
+          <CardContent className="p-8 space-y-8">
+            <div className="space-y-4">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                {lang === "pt" ? "Data da Última Menstruação" : "Last Period Date"}
+              </label>
+              <input 
+                type="date"
+                value={setupLastPeriod}
+                onChange={(e) => setSetupLastPeriod(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-rose-500 transition-colors"
+              />
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex justify-between">
+                <span>{lang === "pt" ? "Duração Média do Ciclo" : "Average Cycle Length"}</span>
+                <span className="text-rose-400">{setupCycleLength} dias</span>
+              </label>
+              <input 
+                type="range"
+                min="21"
+                max="45"
+                value={setupCycleLength}
+                onChange={(e) => setSetupCycleLength(parseInt(e.target.value))}
+                className="w-full accent-rose-500"
+              />
+              <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
+                <span>21 dias</span>
+                <span>28 dias (Média)</span>
+                <span>45 dias</span>
+              </div>
+            </div>
+
+            <Button 
+              onClick={handleSaveCycleSetup}
+              disabled={isSubmitting}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest py-8 rounded-2xl shadow-lg shadow-rose-500/20 transition-all hover:scale-[1.02] active:scale-95"
+            >
+              {isSubmitting ? (
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                lang === "pt" ? "Salvar e Continuar" : "Save and Continue"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
+    if (view === "history") {
+    const streak = calculateStreak();
+    const chartData = historyData
+      .slice()
+      .reverse()
+      .map((record) => ({
+        date: parseDateString(record.record_date || record.created_at).toLocaleDateString(
+          lang === "pt" ? "pt-BR" : "en-US",
+          { day: "2-digit", month: "2-digit" },
+        ),
+        score: record.readiness_score,
+      }));
+
+    // Gamification & Insights Logic
+    const latestCheckIn = historyData[0];
+    const hasCheckedInToday =
+      latestCheckIn &&
+      parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toDateString() ===
+        new Date().toDateString();
+    const currentReadiness = latestCheckIn?.readiness_score ?? 0;
+
+    const latestPainMap = (() => {
+      if (!latestCheckIn?.soreness_location) return {};
+      try {
+        const parsed = JSON.parse(latestCheckIn.soreness_location);
+        if (Array.isArray(parsed)) {
+          const map: Record<string, any> = {};
+          parsed.forEach(item => {
+            map[item.region] = { level: item.intensity, type: item.type || 'muscle' };
+          });
+          return map;
+        } else if (typeof parsed === 'object') {
+          return parsed;
+        }
+      } catch (e) {
+        // Fallback for old comma-separated format
+        const parts = latestCheckIn.soreness_location.split(',').map((s: string) => s.trim());
+        const map: Record<string, any> = {};
+        parts.forEach((p: string) => {
+          if (p) map[p] = { level: latestCheckIn.muscle_soreness || 5, type: 'muscle' };
+        });
+        return map;
+      }
+      return {};
+    })();
+
+    // Use real data if available, otherwise 0
+    const currentXp = athleteData?.xp || 0;
+    const currentCoins = athleteData?.coins || 0;
+    const athleteLevel = Math.floor(currentXp / 500) + 1;
+
+    const getInsight = () => {
+      if (!latestCheckIn)
+        return lang === "pt"
+          ? "Faça seu check-in para receber dicas personalizadas!"
+          : "Complete your check-in for personalized tips!";
+      if (latestCheckIn.sleep_hours < 6)
+        return lang === "pt"
+          ? "Seu sono foi curto. Uma soneca de 20 min à tarde pode ajudar na recuperação."
+          : "Short sleep. A 20-min power nap can boost recovery.";
+      if (latestCheckIn.muscle_soreness >= 4)
+        return lang === "pt"
+          ? "Dores musculares altas. Foco em mobilidade e hidratação hoje."
+          : "High muscle soreness. Focus on mobility and hydration today.";
+      if (latestCheckIn.stress_level >= 4)
+        return lang === "pt"
+          ? "Nível de estresse elevado. Tire 5 minutos para respiração profunda antes do treino."
+          : "High stress. Take 5 mins for deep breathing before training.";
+      if (currentReadiness > 80)
+        return lang === "pt"
+          ? "Você está na sua melhor forma! Dia perfeito para alta intensidade."
+          : "You are in top shape! Perfect day for high intensity.";
+      return lang === "pt"
+        ? "Recuperação estável. Mantenha o foco na hidratação e boa alimentação."
+        : "Stable recovery. Keep focusing on hydration and nutrition.";
+    };
+
+    // Generate last 7 days for the weekly tracker
+    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateStr = d.toDateString();
+      const hasRecord = historyData.some(
+        (record) => parseDateString(record.record_date || record.created_at).toDateString() === dateStr,
+      );
+      return {
+        dayName: d.toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+          weekday: "short",
+        }),
+        hasRecord,
+        isToday: i === 6,
+      };
+    });
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-3xl mx-auto space-y-8 pb-12"
+      >
+        {/* Top Bar: Title, Language & Gamification Stats */}
+        <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 gap-4 w-full">
+          <div className="flex items-center gap-2 w-full sm:w-auto pl-12 sm:pl-0">
+            <Button variant="ghost" size="icon" onClick={onBack} className="text-slate-400 hover:text-rose-400 mr-2 shrink-0" title="Sair">
+              <LogOut className="w-6 h-6" />
+            </Button>
+            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight uppercase truncate">
+              App do Atleta <span className={theme.text}>Elleven</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar w-full sm:w-auto justify-center sm:justify-end py-1">
+            <div className={`flex items-center gap-2 ${theme.bgAlpha} px-3 py-1.5 rounded-full border ${theme.border} shrink-0`}>
+              <Trophy className={`w-4 h-4 sm:w-5 sm:h-5 ${theme.text}`} />
+              <span className={`text-xs sm:text-sm font-bold ${theme.icon}`}>
+                Lvl {athleteLevel}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-yellow-500/20 px-3 py-1.5 rounded-full border border-yellow-500/30 shrink-0">
+              <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+              <span className="text-xs sm:text-sm font-bold text-yellow-300">
+                {currentCoins}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleLang}
+              className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-sm"
+            >
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
+              {lang === "pt" ? "EN" : "PT"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="text-center space-y-4 sm:space-y-6">
+          <div className="flex flex-col items-center justify-center gap-4 sm:gap-6">
+            <div className={`relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
+              {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') ? (
+                <Image 
+                  src={athleteData.avatar_url} 
+                  alt={athleteData.name} 
+                  fill 
+                  className="object-cover"
+                  unoptimized
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className={`w-full h-full ${theme.bgAlpha} flex items-center justify-center`}>
+                  <User className={`w-12 h-12 sm:w-16 sm:h-16 ${theme.icon}`} />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+              <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                {t[lang].greeting.replace("{name}", athleteData?.nickname || athleteData?.name || "")}
+              </h2>
+              {athleteData?.birth_date && (
+                <p className={`text-[10px] sm:text-xs font-black ${theme.text} uppercase tracking-[0.2em]`}>
+                  {(() => {
+                    const age = calculateDetailedAge(athleteData.birth_date);
+                    if (!age) return '';
+                    return `${age.years} anos, ${age.months} meses e ${age.days} dias`;
+                  })()}
+                </p>
+              )}
+              {athleteCode && (
+                <span className={`px-3 py-1 ${theme.bgAlpha} ${theme.text} text-[10px] sm:text-xs font-bold rounded-full uppercase tracking-widest border ${theme.borderAlpha} shadow-lg`}>
+                  #{athleteCode}
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="text-slate-400 font-medium text-sm sm:text-base max-w-md mx-auto">
+            {lang === "pt"
+              ? "Pronto para dominar o dia?"
+              : "Ready to dominate the day?"}
+          </p>
+        </div>
+
+        {/* Motivational Quote */}
+        <div className={`bg-slate-900/40 p-6 rounded-2xl border ${theme.borderAlpha} relative ${theme.shadowStrong} overflow-hidden max-w-md mx-auto`}>
+          <Quote className={`absolute top-4 left-4 w-6 h-6 ${theme.bgAlpha}`} />
+          <p className="text-sm text-slate-300 font-medium italic relative z-10 leading-relaxed pt-2 px-4">
+            &quot;{quote.text}&quot;
+          </p>
+          <p className={`text-xs ${theme.text} font-bold uppercase tracking-widest mt-3`}>
+            — {quote.author}
+          </p>
+        </div>
+
+        {/* Cycle Alert (Dynamic for Female Athletes) */}
+        {athleteGender === "F" && (
+          <>
+            {cycleInfo ? (
+              <div className={`bg-rose-500/10 border ${cycleInfo.isLate ? 'border-rose-500 animate-pulse' : 'border-rose-500/30'} rounded-2xl p-4 flex items-start gap-4 max-w-md mx-auto shadow-lg`}>
+                <div className={`p-2 ${cycleInfo.isLate ? 'bg-rose-500' : 'bg-rose-500/20'} rounded-full shrink-0`}>
+                  <Droplets className={`w-5 h-5 ${cycleInfo.isLate ? 'text-white' : 'text-rose-400'}`} />
+                </div>
+                <div>
+                  <h4 className={`text-sm font-bold ${cycleInfo.isLate ? 'text-rose-500' : 'text-rose-300'} mb-1 flex items-center gap-2`}>
+                    {cycleInfo.isLate ? (
+                      <>
+                        <AlertCircle className="w-4 h-4" />
+                        {lang === "pt" ? "Atraso Detectado" : "Delay Detected"}
+                      </>
+                    ) : (
+                      lang === "pt" ? "Status do Ciclo" : "Cycle Status"
+                    )}
+                  </h4>
+                  <p className="text-xs text-rose-200/80 leading-relaxed">
+                    {cycleInfo.isLate ? (
+                      lang === "pt" 
+                        ? `Seu ciclo está com ${Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength} dias de atraso. Por favor, informe se o ciclo iniciou ou procure a comissão.`
+                        : `Your cycle is ${Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength} days late. Please report if it started or contact the staff.`
+                    ) : (
+                      lang === "pt"
+                        ? `Você está no Dia ${cycleInfo.currentDay} (${cycleInfo.phase}). Próxima menstruação em aproximadamente ${cycleInfo.nextPeriodDays} dias.`
+                        : `You are on Day ${cycleInfo.currentDay} (${cycleInfo.phase}). Next period in approximately ${cycleInfo.nextPeriodDays} days.`
+                    )}
+                  </p>
+                  {!hasCheckedInToday && (
+                    <Button 
+                      size="sm" 
+                      onClick={handleStartCycle}
+                      className="mt-3 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest h-7 px-3 rounded-lg"
+                    >
+                      {lang === "pt" ? "Meu Ciclo Iniciou Hoje" : "My Cycle Started Today"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : !loadingAthlete && (
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-6 flex flex-col items-center text-center gap-4 max-w-md mx-auto shadow-lg">
+                <div className="p-3 bg-rose-500/20 rounded-full">
+                  <CalendarDays className="w-8 h-8 text-rose-400" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-white uppercase tracking-wider mb-2">
+                    {lang === "pt" ? "Configurar Ciclo Menstrual" : "Setup Menstrual Cycle"}
+                  </h4>
+                  <p className="text-sm text-rose-200/80 leading-relaxed mb-4">
+                    {lang === "pt" 
+                      ? "Para automatizarmos seu acompanhamento, precisamos saber a data da sua última menstruação."
+                      : "To automate your tracking, we need to know the date of your last period."}
+                  </p>
+                  <Button 
+                    onClick={() => setView("cycle_setup")}
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest py-6 rounded-xl"
+                  >
+                    {lang === "pt" ? "Configurar Agora" : "Setup Now"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Readiness Gauge & Main Action */}
+        <div className="bg-gradient-to-b from-slate-900/80 to-slate-900/40 p-8 rounded-3xl border border-slate-800/50 relative overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.2)]">
+          <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${theme.gradientFrom} ${theme.gradientVia} ${theme.gradientTo} opacity-50`}></div>
+
+          <div className="flex flex-col items-center justify-center space-y-6">
+            {/* Circular Gauge */}
+            <div className="relative w-64 h-64 flex items-center justify-center">
+              <svg
+                className="w-full h-full transform -rotate-90"
+                viewBox="0 0 100 100"
+              >
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="transparent"
+                  stroke="#1e293b"
+                  strokeWidth="6"
+                />
+                <motion.circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="transparent"
+                  stroke={
+                    currentReadiness >= 80
+                      ? "#22c55e"
+                      : currentReadiness >= 50
+                        ? "#eab308"
+                        : "#ef4444"
+                  }
+                  strokeWidth="8"
+                  strokeDasharray="263.9"
+                  strokeDashoffset={263.9 - (currentReadiness / 100) * 263.9}
+                  strokeLinecap="round"
+                  initial={{ strokeDashoffset: 263.9 }}
+                  animate={{
+                    strokeDashoffset: 263.9 - (currentReadiness / 100) * 263.9,
+                  }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center">
+                <span className="text-7xl font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                  {currentReadiness}
+                </span>
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  {lang === "pt" ? "Prontidão" : "Readiness"}
+                </span>
+                {athleteGender === "F" && (
+                  <span className="text-xs font-bold text-rose-400 mt-2 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
+                    {lang === "pt" ? "-5% Ciclo" : "-5% Cycle"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 w-full sm:w-auto">
+              <Button
+                size="lg"
+                onClick={() => setView("questionnaire")}
+                disabled={hasCheckedInToday}
+                className={`w-full font-black uppercase tracking-widest ${theme.shadowStrong} py-8 text-lg rounded-2xl transition-all ${
+                  hasCheckedInToday
+                    ? "bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700"
+                    : `${theme.button} text-white hover:scale-105`
+                }`}
+              >
+                {hasCheckedInToday ? (
+                  <>
+                    <CheckCircle2 className="w-6 h-6 mr-3 text-green-400" />
+                    {lang === "pt" ? "Check-in Concluído" : "Check-in Complete"}
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-6 h-6 mr-3 text-yellow-400" />
+                    {lang === "pt"
+                      ? "Fazer Check-in (+50 XP)"
+                      : "Do Check-in (+50 XP)"}
+                  </>
+                )}
+              </Button>
+              
+              {athleteGender === "F" && (
+                <Button
+                  size="lg"
+                  onClick={() => setView("cycle")}
+                  className={`w-full font-black uppercase tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.3)] py-6 text-md rounded-2xl transition-all bg-rose-900/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/60 hover:scale-105`}
+                >
+                  <Droplets className="w-5 h-5 mr-3 text-rose-400" />
+                  {lang === "pt" ? "Meu Ciclo" : "My Cycle"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Wellness Summary Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
+              <ActivitySquare className={`w-6 h-6 ${theme.text}`} />
+              {lang === "pt" ? "Resumo Wellness" : "Wellness Summary"}
+            </h3>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              {latestCheckIn ? parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toLocaleDateString() : "--"}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {metrics.filter(m => m.id !== 'menstrual_cycle').slice(0, 8).map(metric => {
+              const value = latestCheckIn ? latestCheckIn[metric.id] : null;
+              const options = getOptionsForMetric(metric.id, lang);
+              const option = options.find(o => o.value === value);
+              
+              return (
+                <Card key={metric.id} className="bg-slate-900/40 border-slate-800/50 overflow-hidden group hover:border-cyan-500/30 transition-all">
+                  <CardContent className="p-4 flex flex-col items-center text-center space-y-2">
+                    <div className={`p-2 rounded-xl ${theme.bgAlpha} ${theme.text}`}>
+                      <metric.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate w-full">{metric.label}</p>
+                    {option ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-xl">{option.emoji}</span>
+                        <span className={`text-[10px] font-bold ${option.color.replace('bg-', 'text-')} uppercase mt-1`}>{option.label}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-600 font-bold">--</span>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pain Map Summary Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
+            <Activity className="w-6 h-6 text-rose-500" />
+            {lang === "pt" ? "Mapa de Dor" : "Pain Map"}
+          </h3>
+          
+          <Card className="bg-slate-900/40 border-slate-800/50 overflow-hidden shadow-xl">
+            <CardContent className="p-0 flex flex-col md:flex-row items-center justify-center gap-8 py-8 px-6">
+              <div className="w-64 h-auto shrink-0">
+                <PainMap 
+                  value={latestPainMap} 
+                  readOnly={true}
+                />
+              </div>
+              <div className="flex-1 space-y-3 w-full">
+                {Object.keys(latestPainMap).length > 0 ? (
+                  Object.entries(latestPainMap).map(([part, data]) => (
+                    <div key={part} className="flex items-center justify-between gap-4 bg-slate-800/50 p-3 rounded-xl border border-slate-700/30 group hover:border-rose-500/30 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)] ${data.level >= 7 ? 'bg-red-500' : data.level >= 4 ? 'bg-orange-500' : 'bg-yellow-500'}`}></div>
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">{getPainLocationLabel(part)}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900 px-2 py-1 rounded-md">{data.type}</span>
+                        <span className="text-xs font-black text-white">Nível {data.level}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center p-12 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500/20 mx-auto mb-3" />
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                      {lang === "pt" ? "Nenhuma dor relatada" : "No pain reported"}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-1 uppercase tracking-tighter">
+                      {lang === "pt" ? "Continue assim!" : "Keep it up!"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Weekly Tracker & Streak */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDays className={`w-6 h-6 ${theme.text}`} />
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                {lang === "pt" ? "Missões da Semana" : "Weekly Quests"}
+              </h3>
+            </div>
+            <div className="flex justify-between items-center">
+              {last7Days.map((day, i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      day.hasRecord
+                        ? `${theme.bgAlpha} ${theme.border} ${theme.text} ${theme.shadow}`
+                        : day.isToday
+                          ? "bg-slate-800 border-slate-600 text-slate-500 border-dashed"
+                          : "bg-slate-900 border-slate-800 text-slate-700"
+                    }`}
+                  >
+                    {day.hasRecord ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <span className="text-sm font-bold">
+                        {day.dayName.charAt(0)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-2">
+              <Flame className="w-6 h-6 text-orange-500" />
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                {lang === "pt" ? "Ofensiva Atual" : "Current Streak"}
+              </h3>
+            </div>
+            <div className="flex items-end gap-3">
+              <span className="text-5xl font-black text-orange-400 drop-shadow-[0_0_10px_rgba(249,115,22,0.3)]">
+                {streak}
+              </span>
+              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest pb-1">
+                {lang === "pt" ? "Dias Seguidos" : "Days in a row"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Coach's Insight & Recent Notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`${theme.bgAlpha} p-6 rounded-2xl border ${theme.border} relative overflow-hidden group`}>
+            <div className={`absolute -right-4 -top-4 w-24 h-24 ${theme.bgAlpha} rounded-full blur-2xl opacity-50 group-hover:opacity-80 transition-opacity`}></div>
+            <div className="flex items-start gap-4 relative z-10">
+              <div className={`p-3 ${theme.bgAlpha} rounded-xl border ${theme.border} shrink-0`}>
+                <Lightbulb className={`w-8 h-8 ${theme.text}`} />
+              </div>
+              <div>
+                <h3 className={`text-base font-black ${theme.icon} uppercase tracking-wider mb-1`}>
+                  {lang === "pt" ? "Dica da Cris" : "Cris's Insight"}
+                </h3>
+                <p className="text-slate-300 font-medium leading-relaxed text-lg">
+                  {getInsight()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50 flex flex-col justify-between group hover:border-blue-500/30 transition-all">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <MessageSquare className="w-5 h-5 text-blue-400" />
+              </div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest">
+                {lang === "pt" ? "Notas Recentes" : "Recent Notes"}
+              </h3>
+            </div>
+            <div className="flex-1">
+              {latestCheckIn?.notes ? (
+                <p className="text-sm text-slate-400 italic line-clamp-4 leading-relaxed">
+                  &quot;{latestCheckIn.notes}&quot;
+                </p>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full py-4 opacity-40">
+                  <MessageSquare className="w-8 h-8 text-slate-600 mb-2" />
+                  <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                    {lang === "pt" ? "Nenhuma nota" : "No notes"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 mt-12 pt-8 border-t border-slate-800/50">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+              <History className="w-6 h-6 text-slate-400" />
+            </div>
+            <h3 className="text-2xl font-black text-white uppercase tracking-wider">
+              {t[lang].yourHistory}
+            </h3>
+          </div>
+
+          {loadingHistory ? (
+            <div className="flex justify-center py-12">
+              <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${athleteGender === 'M' ? 'border-indigo-500' : 'border-rose-500'}`}></div>
+            </div>
+          ) : historyData.length === 0 ? (
+            <div className="text-center py-12 bg-slate-900/30 rounded-2xl border border-slate-800/50">
+              <p className="text-slate-400 font-medium">{t[lang].noRecords}</p>
+              <p className="text-sm text-slate-500 mt-1">
+                {t[lang].firstCheckin}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {chartData.length > 1 && (
+                <Card className="bg-[#0A1120] border-slate-800/50 p-4">
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#1e293b"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#475569"
+                          fontSize={10}
+                          tickMargin={10}
+                        />
+                        <YAxis
+                          stroke="#475569"
+                          fontSize={10}
+                          domain={[0, 100]}
+                          hide
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid #334155",
+                            borderRadius: "8px",
+                          }}
+                          itemStyle={{ color: "#818cf8", fontWeight: "bold" }}
+                          labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          stroke="#6366f1"
+                          strokeWidth={3}
+                          dot={{
+                            fill: "#0f172a",
+                            stroke: "#6366f1",
+                            strokeWidth: 2,
+                            r: 4,
+                          }}
+                          activeDot={{ r: 6, fill: "#818cf8", stroke: "#fff" }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              )}
+
+              <div className="grid gap-4">
+                {historyData.map((record) => {
+                  const date = parseDateString(record.record_date || record.created_at);
+                  const isGood = record.readiness_score >= 75;
+                  const isWarning =
+                    record.readiness_score >= 50 && record.readiness_score < 75;
+
+                  return (
+                    <motion.div
+                      key={record.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                    >
+                      <Card className={`bg-[#0A1120] border-slate-800/50 hover:${theme.border} transition-colors overflow-hidden relative group`}>
+                        <div
+                          className={`absolute left-0 top-0 bottom-0 w-1 ${isGood ? "bg-emerald-500" : isWarning ? "bg-amber-500" : "bg-red-500"}`}
+                        ></div>
+                        <CardContent className="p-5 flex items-center justify-between pl-6">
+                          <div>
+                            <p className="text-white font-bold text-lg capitalize">
+                              {date.toLocaleDateString(
+                                lang === "pt" ? "pt-BR" : "en-US",
+                                {
+                                  weekday: "long",
+                                  day: "2-digit",
+                                  month: "short",
+                                },
+                              )}
+                            </p>
+                            <p className="text-xs text-slate-400 uppercase tracking-wider mt-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {date.toLocaleTimeString(
+                                lang === "pt" ? "pt-BR" : "en-US",
+                                { hour: "2-digit", minute: "2-digit" },
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                                {t[lang].battery}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-2xl font-black ${isGood ? "text-emerald-400" : isWarning ? "text-amber-400" : "text-red-400"}`}
+                                >
+                                  {record.readiness_score}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (view === "summary") {
+    const tips = getTips();
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-3xl mx-auto space-y-8 pb-12"
+      >
+        <div className="text-center space-y-4">
+          <h2 className="text-3xl font-black text-white uppercase tracking-tight">
+            {t[lang].yourDailyStatus}
+          </h2>
+          <p className="text-slate-400 font-medium">{t[lang].summarySent}</p>
+        </div>
+
+        <Card className={`bg-[#0A1120] ${theme.borderAlpha} shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden`}>
+          <CardHeader className={`bg-gradient-to-r ${theme.gradientFrom} to-transparent pb-6 border-b ${theme.borderAlpha} text-center`}>
+            <div className="w-48 h-48 mx-auto bg-slate-900 rounded-full flex items-center justify-center border-4 border-slate-800 mb-4 relative shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <span
+                className={`text-6xl font-black ${readiness >= 75 ? "text-emerald-400 drop-shadow-[0_0_20px_rgba(16,185,129,0.5)]" : readiness >= 50 ? "text-amber-400 drop-shadow-[0_0_20px_rgba(245,158,11,0.5)]" : "text-red-400 drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]"}`}
+              >
+                {readiness}%
+              </span>
+            </div>
+            <CardTitle className="text-2xl text-white uppercase tracking-wider font-black">
+              {readiness >= 75
+                ? t[lang].readyForGame
+                : readiness >= 50
+                  ? t[lang].moderateAttention
+                  : t[lang].lowBattery}
+            </CardTitle>
+            <CardDescription className="text-slate-400 mt-2 text-base max-w-md mx-auto">
+              {readiness >= 75
+                ? t[lang].goodRecovery
+                : readiness >= 50
+                  ? t[lang].moderateFatigue
+                  : t[lang].highRisk}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {tips.length > 0 && (
+              <div className={`mb-6 ${theme.bgAlpha} border ${theme.borderAlpha} rounded-xl p-4`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Lightbulb className={`w-5 h-5 ${theme.text}`} />
+                  <h3 className={`text-sm font-bold ${theme.icon} uppercase tracking-widest`}>
+                    {t[lang].tips}
+                  </h3>
+                </div>
+                <ul className="space-y-2">
+                  {tips.map((tip, i) => (
+                    <li
+                      key={i}
+                      className="text-slate-300 text-sm flex items-start gap-2"
+                    >
+                      <span className={`${theme.text} mt-0.5`}>•</span> {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">
+              {t[lang].yourAnswers}
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {metrics.map((m) => {
+                const val = answers[m.id];
+                const opt = getOptionsForMetric(m.id, lang).find(
+                  (o) => o.value === val,
+                );
+                return (
+                  <div
+                    key={m.id}
+                    className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50 flex flex-col items-center text-center"
+                  >
+                    <m.icon className={`w-5 h-5 ${theme.text} mb-2`} />
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">
+                      {m.label}
+                    </span>
+                    <span className="text-lg">
+                      {opt?.emoji}{" "}
+                      <span className="text-sm text-white font-medium ml-1">
+                        {opt?.label}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {Object.keys(painMap).length > 0 && (
+              <div className="mt-6 pt-6 border-t border-slate-800/50">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">
+                  {t[lang].painMapping}
+                </h3>
+                <div className="space-y-3">
+                  {Object.entries(painMap).map(([part, data]) => {
+                    const typeLabel =
+                      t[lang].painTypes[
+                        data.type as keyof typeof t.pt.painTypes
+                      ] || data.type;
+                    const intensityColor = getPainIntensityColor(data.level);
+                    const locationLabel = getPainLocationLabel(part);
+                    
+                    return (
+                      <div
+                        key={part}
+                        className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-xl group hover:border-slate-700 transition-colors"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white uppercase tracking-wider">
+                            {locationLabel}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-0.5">
+                            {typeLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-24 bg-slate-800 rounded-full overflow-hidden hidden sm:block">
+                            <div 
+                              className={`h-full rounded-full ${
+                                data.level <= 3 ? 'bg-emerald-500' : 
+                                data.level <= 6 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${(data.level / 10) * 100}%` }}
+                            />
+                          </div>
+                          <span className={`text-sm font-black tracking-tighter ${intensityColor}`}>
+                            {data.level}/10
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-center pt-4">
+          <Button
+            variant="outline"
+            onClick={resetForm}
+            className="bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white uppercase tracking-wider font-bold"
+          >
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            {t[lang].backToHome}
+          </Button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (view === "cycle") {
+    const currentDayOfCycle = cycleInfo?.currentDay || 1;
+    const cycleLength = cycleInfo?.cycleLength || 28;
+    const nextPeriodDays = cycleInfo?.nextPeriodDays || 0;
+    const phaseKey = cycleInfo?.phaseKey || 'menstrual';
+    
+    const symptoms = [
+      { id: "cramps", label: lang === "pt" ? "Cólica" : "Cramps", icon: Activity, colorClass: "text-rose-400", bgClass: "bg-rose-500/20", hoverBorder: "hover:border-rose-500/60", hoverBg: "hover:bg-rose-500/30" },
+      { id: "bloating", label: lang === "pt" ? "Inchaço" : "Bloating", icon: Droplets, colorClass: "text-cyan-400", bgClass: "bg-cyan-500/20", hoverBorder: "hover:border-cyan-500/60", hoverBg: "hover:bg-cyan-500/30" },
+      { id: "headache", label: lang === "pt" ? "Dor de cabeça" : "Headache", icon: Zap, colorClass: "text-amber-400", bgClass: "bg-amber-500/20", hoverBorder: "hover:border-amber-500/60", hoverBg: "hover:bg-amber-500/30" },
+      { id: "fatigue", label: lang === "pt" ? "Fadiga" : "Fatigue", icon: Battery, colorClass: "text-violet-400", bgClass: "bg-violet-500/20", hoverBorder: "hover:border-violet-500/60", hoverBg: "hover:bg-violet-500/30" },
+      { id: "mood", label: lang === "pt" ? "Humor" : "Mood swings", icon: Smile, colorClass: "text-fuchsia-400", bgClass: "bg-fuchsia-500/20", hoverBorder: "hover:border-fuchsia-500/60", hoverBg: "hover:bg-fuchsia-500/30" },
+      { id: "acne", label: lang === "pt" ? "Acne" : "Acne", icon: Target, colorClass: "text-emerald-400", bgClass: "bg-emerald-500/20", hoverBorder: "hover:border-emerald-500/60", hoverBg: "hover:bg-emerald-500/30" },
+    ];
+
+    const getPhaseInfo = (key: string) => {
+      switch(key) {
+        case 'menstrual':
+          return {
+            name: lang === "pt" ? "Fase Menstrual" : "Menstrual Phase",
+            body: lang === "pt" 
+              ? "Níveis de estrogênio e progesterona estão baixos. O revestimento uterino está sendo eliminado. Você pode sentir cólicas, cansaço e maior sensibilidade."
+              : "Estrogen and progesterone levels are low. The uterine lining is being shed. You may feel cramps, fatigue, and increased sensitivity.",
+            training: lang === "pt"
+              ? "Foco em recuperação e mobilidade. Treinos de baixa intensidade, yoga ou caminhadas leves são ideais. Ouça seu corpo e não tenha medo de descansar se necessário."
+              : "Focus on recovery and mobility. Low-intensity workouts, yoga, or light walks are ideal. Listen to your body and don't be afraid to rest if needed.",
+            nutrition: lang === "pt"
+              ? "Aumente a ingestão de ferro (carnes magras, espinafre) e magnésio (chocolate amargo, sementes). Chás quentes podem ajudar com as cólicas."
+              : "Increase iron intake (lean meats, spinach) and magnesium (dark chocolate, seeds). Warm teas can help with cramps.",
+          };
+        case 'follicular':
+          return {
+            name: lang === "pt" ? "Fase Folicular" : "Follicular Phase",
+            body: lang === "pt" 
+              ? "O estrogênio começa a subir. Você começa a se sentir com mais energia, foco e disposição física."
+              : "Estrogen starts to rise. You begin to feel more energetic, focused, and physically ready.",
+            training: lang === "pt"
+              ? "Ótimo momento para aumentar a intensidade progressivamente. Sua resistência está melhorando e você se recupera mais rápido dos treinos."
+              : "Great time to progressively increase intensity. Your endurance is improving, and you recover faster from workouts.",
+            nutrition: lang === "pt"
+              ? "Consuma alimentos que ajudem a metabolizar o estrogênio, como vegetais crucíferos (brócolis, couve-flor). Carboidratos complexos são bem-vindos."
+              : "Consume foods that help metabolize estrogen, such as cruciferous vegetables (broccoli, cauliflower). Complex carbs are welcome.",
+          };
+        case 'ovulatory':
+          return {
+            name: lang === "pt" ? "Fase Ovulatória" : "Ovulatory Phase",
+            body: lang === "pt" 
+              ? "O estrogênio e a testosterona atingem o pico. Um óvulo é liberado. Você pode se sentir mais sociável, confiante e com a libido em alta."
+              : "Estrogen and testosterone peak. An egg is released. You may feel more sociable, confident, and have a higher libido.",
+            training: lang === "pt"
+              ? "Pico de energia e força! É um ótimo momento para treinos de alta intensidade e buscar novos recordes pessoais (PRs). No entanto, preste atenção ao aquecimento, pois há estudos sugerindo maior risco de lesões ligamentares nesta fase."
+              : "Peak energy and strength! It's a great time for high-intensity workouts and going for personal records (PRs). However, pay extra attention to your warm-up, as some studies suggest a higher risk of ligament injuries during this phase.",
+            nutrition: lang === "pt"
+              ? "Foque em carboidratos complexos (aveia, batata doce) para sustentar os treinos intensos. Antioxidantes (frutas vermelhas) ajudam na recuperação e combatem a inflamação."
+              : "Focus on complex carbs (oats, sweet potatoes) to fuel intense workouts. Antioxidants (berries) help with recovery and combat inflammation.",
+          };
+        case 'luteal':
+        default:
+          return {
+            name: lang === "pt" ? "Fase Lútea" : "Luteal Phase",
+            body: lang === "pt" 
+              ? "A progesterona sobe. Você pode sentir retenção de líquidos, sensibilidade nos seios e variações de humor (TPM)."
+              : "Progesterone rises. You may feel water retention, breast sensitivity, and mood swings (PMS).",
+            training: lang === "pt"
+              ? "Sua temperatura corporal sobe e a frequência cardíaca pode ser mais alta. Foque em treinos de intensidade moderada e técnica. O corpo queima mais gordura como combustível nesta fase."
+              : "Your body temperature rises, and your heart rate may be higher. Focus on moderate-intensity workouts and technique. The body burns more fat as fuel in this phase.",
+            nutrition: lang === "pt"
+              ? "Aumente a ingestão de fibras para ajudar na digestão. Alimentos ricos em triptofano (banana, aveia) podem ajudar com o humor. Evite excesso de sal para reduzir o inchaço."
+              : "Increase fiber intake to help with digestion. Foods rich in tryptophan (banana, oats) can help with mood. Avoid excess salt to reduce bloating.",
+          };
+      }
+    };
+
+    const phaseInfo = getPhaseInfo(phaseKey);
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-3xl mx-auto space-y-8 pb-12"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => setView("history")}
+            className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" />
+            {t[lang].back}
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-rose-500/20 rounded-lg">
+              <Droplets className="w-5 h-5 text-rose-400" />
+            </div>
+            <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-purple-400 uppercase tracking-wider">
+              {lang === "pt" ? "Controle de Ciclo" : "Cycle Tracker"}
+            </span>
+          </div>
+        </div>
+
+        {/* Hero Section - Cycle Status */}
+        <div className="bg-slate-900/40 p-8 rounded-3xl border border-slate-800/50 flex flex-col items-center justify-center relative overflow-hidden">
+          
+          <div className="relative w-64 h-64 flex items-center justify-center mb-6">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              {/* Background circle */}
+              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#1e293b" strokeWidth="6" />
+              
+              {/* Menstruation phase (Days 1-5) */}
+              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#f43f5e" strokeWidth="6" strokeDasharray="282.7" strokeDashoffset={282.7 - (5/28) * 282.7} strokeLinecap="round" />
+              
+              {/* Follicular phase (Days 6-13) */}
+              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#8b5cf6" strokeWidth="6" strokeDasharray="282.7" strokeDashoffset={282.7 - (8/28) * 282.7} strokeLinecap="round" className="origin-center rotate-[64deg]" />
+              
+              {/* Ovulation phase (Days 14-15) */}
+              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#3b82f6" strokeWidth="6" strokeDasharray="282.7" strokeDashoffset={282.7 - (2/28) * 282.7} strokeLinecap="round" className="origin-center rotate-[167deg]" />
+              
+              {/* Luteal phase (Days 16-28) */}
+              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#f59e0b" strokeWidth="6" strokeDasharray="282.7" strokeDashoffset={282.7 - (13/28) * 282.7} strokeLinecap="round" className="origin-center rotate-[193deg]" />
+              
+              {/* Current day indicator */}
+              <circle cx="50" cy="5" r="3" fill="#fff" className="origin-center" style={{ transform: `rotate(${(currentDayOfCycle/cycleLength) * 360}deg)` }} />
+            </svg>
+            
+            <div className="absolute flex flex-col items-center justify-center text-center">
+              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">
+                {lang === "pt" ? "Dia" : "Day"}
+              </span>
+              <span className="text-6xl font-black text-white mb-2">
+                {currentDayOfCycle}
+              </span>
+              <span className="text-xs font-bold text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full">
+                {phaseInfo.name}
+              </span>
+            </div>
+          </div>
+          
+          <p className="text-slate-400 text-center max-w-md">
+            {lang === "pt" 
+              ? `Sua próxima menstruação está prevista para daqui a ${nextPeriodDays} dias.` 
+              : `Your next period is expected in ${nextPeriodDays} days.`}
+          </p>
+        </div>
+
+        {/* Phase Insights (Body, Training & Nutrition) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Body Insights */}
+          <div className="bg-gradient-to-br from-purple-900/60 to-fuchsia-900/40 p-6 rounded-2xl border border-purple-500/60 flex flex-col shadow-[0_0_20px_rgba(168,85,247,0.3)] backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-fuchsia-500 rounded-lg shadow-lg shadow-purple-500/50">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-md font-bold text-purple-100">
+                {lang === "pt" ? "No seu corpo" : "In your body"}
+              </h3>
+            </div>
+            <p className="text-purple-50 text-sm leading-relaxed font-medium">
+              {phaseInfo.body}
+            </p>
+          </div>
+
+          {/* Training Insights */}
+          <div className="bg-gradient-to-br from-blue-900/60 to-cyan-900/40 p-6 rounded-2xl border border-blue-500/60 flex flex-col shadow-[0_0_20px_rgba(59,130,246,0.3)] backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg shadow-lg shadow-blue-500/50">
+                <Flame className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-md font-bold text-blue-100">
+                {lang === "pt" ? "Impacto no Treino" : "Training Impact"}
+              </h3>
+            </div>
+            <p className="text-blue-50 text-sm leading-relaxed font-medium">
+              {phaseInfo.training}
+            </p>
+          </div>
+
+          {/* Nutrition Insights */}
+          <div className="bg-gradient-to-br from-emerald-900/60 to-teal-900/40 p-6 rounded-2xl border border-emerald-500/60 flex flex-col shadow-[0_0_20px_rgba(16,185,129,0.3)] backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg shadow-lg shadow-emerald-500/50">
+                <Apple className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-md font-bold text-emerald-100">
+                {lang === "pt" ? "Nutrição" : "Nutrition"}
+              </h3>
+            </div>
+            <p className="text-emerald-50 text-sm leading-relaxed font-medium">
+              {phaseInfo.nutrition}
+            </p>
+          </div>
+        </div>
+
+        {/* Symptoms Logging */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-2">
+            <div className="p-1.5 bg-emerald-500/20 rounded-md">
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">
+              {lang === "pt" ? "Sintomas de Hoje" : "Today's Symptoms"}
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {symptoms.map((symptom) => {
+              const Icon = symptom.icon;
+              return (
+                <button
+                  key={symptom.id}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border border-slate-700/50 bg-slate-800/80 ${symptom.hoverBg} ${symptom.hoverBorder} transition-all group shadow-md hover:shadow-lg`}
+                >
+                  <div className={`p-3 rounded-full ${symptom.bgClass} mb-3 group-hover:scale-110 transition-transform shadow-inner`}>
+                    <Icon className={`w-6 h-6 ${symptom.colorClass}`} />
+                  </div>
+                  <span className={`text-xs font-bold text-slate-200 group-hover:${symptom.colorClass} uppercase tracking-wider transition-colors`}>
+                    {symptom.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Mini Calendar (Compact) */}
+        <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-700/50 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <div className="p-1.5 bg-blue-500/20 rounded-md">
+                <CalendarDays className="w-4 h-4 text-blue-400" />
+              </div>
+              {lang === "pt" ? "Calendário" : "Calendar"}
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+            {["D", "S", "T", "Q", "Q", "S", "S"].map((day, i) => (
+              <div key={i} className="text-[10px] font-bold text-slate-500">{day}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {/* Mock calendar days */}
+            {Array.from({ length: 31 }).map((_, i) => {
+              const day = i + 1;
+              const isPeriod = day >= 1 && day <= 5;
+              const isOvulation = day >= 13 && day <= 15;
+              const isToday = day === 14;
+              
+              return (
+                <div
+                  key={i}
+                  className={`aspect-square flex items-center justify-center rounded-full text-xs font-bold transition-colors
+                    ${isToday ? "bg-gradient-to-br from-rose-500 via-purple-500 to-blue-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.6)] scale-110 z-10" : ""}
+                    ${isPeriod && !isToday ? "bg-rose-500/40 text-rose-100 border border-rose-500/50" : ""}
+                    ${isOvulation && !isToday ? "bg-blue-500/40 text-blue-100 border border-blue-500/50" : ""}
+                    ${!isPeriod && !isOvulation && !isToday ? "text-slate-300 hover:bg-slate-700/80" : ""}
+                  `}
+                >
+                  {day}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-500/60 border border-rose-500"></div> Menstruação</div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500/60 border border-blue-500"></div> Ovulação</div>
+          </div>
+        </div>
+
+        {/* Cycle History */}
+        <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <History className="w-4 h-4 text-slate-400" />
+              {lang === "pt" ? "Histórico de Ciclos" : "Cycle History"}
+            </h3>
+            <span className="text-xs font-bold text-slate-500">
+              {lang === "pt" ? "Média: 28 dias" : "Average: 28 days"}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {[
+              { month: lang === "pt" ? "Fev" : "Feb", days: 28, variance: 0 },
+              { month: lang === "pt" ? "Jan" : "Jan", days: 29, variance: "+1" },
+              { month: lang === "pt" ? "Dez" : "Dec", days: 27, variance: "-1" },
+            ].map((cycle, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30 border border-slate-700/30">
+                <span className="text-sm font-bold text-slate-300 w-8">{cycle.month}</span>
+                <div className="flex-1 px-4 flex items-center gap-4">
+                  <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-rose-500 to-purple-500 rounded-full"
+                      style={{ width: `${(cycle.days / 35) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="text-sm font-bold text-slate-200 w-12 text-right">{cycle.days} d</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Questionnaire View
+  if (loadingAthlete) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Carregando perfil...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-8 pb-12">
+      <SupabaseStatus />
+      <div className="flex justify-between items-center mb-6">
+        <Button
+          variant="ghost"
+          onClick={() => setView("history")}
+          className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
+        >
+          <ChevronLeft className="w-5 h-5 mr-1" />
+          {t[lang].back}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleLang}
+          className="text-slate-400 hover:text-white"
+        >
+          <Globe className="w-4 h-4 mr-2" />
+          {lang === "pt" ? "EN" : "PT-BR"}
+        </Button>
+      </div>
+
+      <div className="flex flex-col items-center text-center space-y-4 sm:space-y-6">
+        {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') && (
+          <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all duration-500 hover:scale-105">
+            <Image 
+              src={athleteData.avatar_url} 
+              alt={athleteData.nickname || athleteData.name} 
+              fill 
+              className="object-cover"
+              unoptimized
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+        <div className="space-y-2 sm:space-y-3">
+          <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+            {lang === "pt" 
+              ? `Atualize sua Bateria, ${athleteData?.nickname || athleteData?.name || ""} ⚡`
+              : `Update your Battery, ${athleteData?.nickname || athleteData?.name || ""} ⚡`}
+          </h2>
+          <p className="text-slate-400 font-medium text-sm sm:text-base">{t[lang].answerHonestly}</p>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {athleteGender === "F" && cycleInfo && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0 }}
+          >
+            <Card className="overflow-hidden bg-[#0A1120] border-rose-500/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <CardHeader className="bg-gradient-to-r from-rose-500/10 to-transparent pb-4 border-b border-rose-500/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-rose-500/20 rounded-lg border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                    <Droplets className="w-6 h-6 text-rose-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-white uppercase tracking-wider font-black">
+                      {lang === "pt" ? "Status do Ciclo" : "Cycle Status"}
+                    </CardTitle>
+                    <CardDescription className="text-rose-400 font-bold">
+                      {lang === "pt" ? `Fase Atual: ${cycleInfo.phase}` : `Current Phase: ${cycleInfo.phase}`}
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+                  <p className="text-xs text-slate-400 leading-relaxed italic">
+                    {cycleInfo.phaseKey === 'menstrual' && (lang === "pt" ? "Fase de baixa hormonal. Foco em repouso e hidratação." : "Low hormone phase. Focus on rest and hydration.")}
+                    {cycleInfo.phaseKey === 'follicular' && (lang === "pt" ? "Energia em ascensão. Bom momento para intensidade progressiva." : "Energy rising. Good time for progressive intensity.")}
+                    {cycleInfo.phaseKey === 'ovulatory' && (lang === "pt" ? "Pico de força e confiança. Cuidado com articulações." : "Peak strength and confidence. Watch your joints.")}
+                    {cycleInfo.phaseKey === 'luteal' && (lang === "pt" ? "Possível queda de rendimento e retenção hídrica." : "Possible performance dip and water retention.")}
+                  </p>
+                </div>
+
+                {cycleInfo.phaseKey === 'menstrual' && (
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      {lang === "pt" ? "Sintomas do Dia" : "Symptoms of the Day"}
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { id: "cramps", label: lang === "pt" ? "Cólica" : "Cramps" },
+                        { id: "headache", label: lang === "pt" ? "Dor de Cabeça" : "Headache" },
+                        { id: "bloating", label: lang === "pt" ? "Inchaço" : "Bloating" },
+                        { id: "fatigue", label: lang === "pt" ? "Fadiga" : "Fatigue" },
+                        { id: "mood", label: lang === "pt" ? "Humor" : "Mood" },
+                        { id: "breast_pain", label: lang === "pt" ? "Dor nos Seios" : "Breast Pain" }
+                      ].map((symptom) => (
+                        <button
+                          key={symptom.id}
+                          onClick={() => toggleMenstrualSymptom(symptom.id)}
+                          className={`py-2.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                            menstrualSymptoms.includes(symptom.id)
+                              ? 'bg-rose-500 text-white border-transparent shadow-lg shadow-rose-500/20 scale-105'
+                              : 'bg-slate-900/50 text-slate-500 border-slate-800 hover:border-rose-500/30'
+                          }`}
+                        >
+                          {symptom.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {metrics.map((metric, index) => {
+          const Icon = metric.icon;
+          const currentOptions = getOptionsForMetric(metric.id, lang);
+          return (
+            <motion.div
+              key={metric.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card className={`overflow-hidden bg-[#0A1120] ${theme.borderAlpha} shadow-[0_0_30px_rgba(0,0,0,0.5)]`}>
+                <CardHeader className={`bg-gradient-to-r ${theme.gradientFrom} to-transparent pb-4 border-b ${theme.borderAlpha}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 ${theme.bgAlpha} rounded-lg border ${theme.border} ${theme.shadow}`}>
+                      <Icon className={`w-6 h-6 ${theme.text}`} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl text-white uppercase tracking-wider font-black">
+                        {metric.label}
+                      </CardTitle>
+                      <CardDescription className="text-slate-400">
+                        {metric.description}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-5 gap-2 sm:gap-4">
+                    {currentOptions.map((option) => {
+                      const isSelected = answers[metric.id] === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => handleSelect(metric.id, option.value)}
+                          className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl transition-all duration-300 border ${
+                            isSelected
+                              ? `${option.color} text-white shadow-[0_0_20px_rgba(255,255,255,0.2)] scale-105 border-transparent`
+                              : "bg-[#050B14] hover:bg-slate-800 border-slate-800 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          <span className="text-2xl sm:text-3xl mb-2 drop-shadow-md">
+                            {option.emoji}
+                          </span>
+                          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-center leading-tight">
+                            {option.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: metrics.length * 0.1 }}
+        >
+          <Card className="overflow-hidden bg-[#0A1120] border-cyan-500/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+            <CardHeader className="bg-gradient-to-r from-cyan-500/10 to-transparent pb-4 border-b border-cyan-500/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-500/20 rounded-lg border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                  <ActivitySquare className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-white uppercase tracking-wider font-bold">
+                    {t[lang].biometricScanner}
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    {t[lang].mapPainAreas}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <PainMap value={painMap} onChange={setPainMap} lang={lang} />
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: (metrics.length + 1) * 0.1 }}
+        >
+          <Card className="overflow-hidden bg-[#0A1120] border-amber-500/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+            <CardHeader className="bg-gradient-to-r from-amber-500/10 to-transparent pb-4 border-b border-amber-500/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <AlertCircle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-white uppercase tracking-wider font-bold">
+                    {lang === "pt" ? "Sintomas Clínicos" : "Clinical Symptoms"}
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    {lang === "pt" ? "Você sentiu algum sintoma hoje?" : "Did you feel any symptoms today?"}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="flex gap-4">
+                <Button
+                  variant={hasSymptomsReport === false ? "default" : "outline"}
+                  onClick={() => setHasSymptomsReport(false)}
+                  className={`flex-1 py-8 text-lg font-bold uppercase tracking-widest transition-all ${
+                    hasSymptomsReport === false 
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white border-transparent" 
+                      : "bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {lang === "pt" ? "Não" : "No"}
+                </Button>
+                <Button
+                  variant={hasSymptomsReport === true ? "default" : "outline"}
+                  onClick={() => setHasSymptomsReport(true)}
+                  className={`flex-1 py-8 text-lg font-bold uppercase tracking-widest transition-all ${
+                    hasSymptomsReport === true 
+                      ? "bg-rose-600 hover:bg-rose-500 text-white border-transparent" 
+                      : "bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {lang === "pt" ? "Sim" : "Yes"}
+                </Button>
+              </div>
+
+              {hasSymptomsReport === true && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="space-y-6 pt-4 border-t border-slate-800/50"
+                >
+                  {[
+                    { id: "headache", label: lang === "pt" ? "Dor de cabeça" : "Headache" },
+                    { id: "dizziness", label: lang === "pt" ? "Tontura" : "Dizziness" },
+                    { id: "nausea", label: lang === "pt" ? "Náusea" : "Nausea" },
+                    { id: "fatigue_extreme", label: lang === "pt" ? "Fadiga extrema" : "Extreme fatigue" },
+                    { id: "general_malaise", label: lang === "pt" ? "Mal-estar geral" : "General malaise" }
+                  ].map((symptom) => (
+                    <div key={symptom.id} className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-300 uppercase tracking-wider">{symptom.label}</span>
+                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded ${
+                          symptoms[symptom.id] === 0 ? 'text-slate-500 bg-slate-800' :
+                          symptoms[symptom.id] === 1 ? 'text-yellow-400 bg-yellow-400/10' :
+                          symptoms[symptom.id] === 2 ? 'text-orange-400 bg-orange-400/10' :
+                          'text-red-400 bg-red-400/10'
+                        }`}>
+                          {symptoms[symptom.id] === 0 ? (lang === "pt" ? "Nenhum" : "None") :
+                           symptoms[symptom.id] === 1 ? (lang === "pt" ? "Leve" : "Mild") :
+                           symptoms[symptom.id] === 2 ? (lang === "pt" ? "Moderado" : "Moderate") :
+                           (lang === "pt" ? "Severo" : "Severe")}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[0, 1, 2, 3].map((level) => (
+                          <button
+                            key={level}
+                            onClick={() => setSymptoms(prev => ({ ...prev, [symptom.id]: level }))}
+                            className={`py-2 rounded-lg text-xs font-bold transition-all border ${
+                              symptoms[symptom.id] === level
+                                ? 'bg-amber-500 text-white border-transparent shadow-lg shadow-amber-500/20'
+                                : 'bg-slate-900/50 text-slate-500 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            {level}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: (metrics.length + 2) * 0.1 }}
+        >
+          <Card className="overflow-hidden bg-[#0A1120] border-slate-700/50 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-slate-800/50 to-transparent pb-4 border-b border-slate-800/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
+                  <MessageSquare className="w-5 h-5 text-slate-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-white uppercase tracking-wider font-bold">
+                    {lang === "pt" ? "Notas para a Comissão" : "Notes for Staff"}
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    {lang === "pt" ? "Algo mais que devemos saber hoje? (Opcional)" : "Anything else we should know today? (Optional)"}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={lang === "pt" ? "Ex: Senti uma fisgada leve no adutor no último treino..." : "Ex: Felt a slight pull in my adductor during the last sprint..."}
+                className="w-full h-24 bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none transition-all"
+              />
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="flex flex-col items-end pt-4 space-y-4"
+      >
+        {submitError && (
+          <div className="w-full p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-center">
+            <p className="text-red-400 font-medium text-sm">{submitError}</p>
+            <p className="text-red-500/70 text-xs mt-1">
+              Dica: Se o erro for de permissão (RLS), execute o script SQL para
+              desativar o RLS.
+            </p>
+          </div>
+        )}
+        <Button
+          size="lg"
+          onClick={handleSubmit}
+          disabled={!isComplete || isSubmitting}
+          className={`w-full sm:w-auto ${theme.button} text-white font-bold uppercase tracking-widest ${theme.shadowStrong} disabled:opacity-50 disabled:shadow-none`}
+        >
+          {isSubmitting ? t[lang].syncing : t[lang].syncData}
+        </Button>
+      </motion.div>
+    </div>
+  );
+}
