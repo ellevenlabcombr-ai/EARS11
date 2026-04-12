@@ -1156,28 +1156,28 @@ export function AthleteDashboard({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto space-y-8 pb-12"
+        className="max-w-3xl mx-auto space-y-6 pb-12 pt-4"
       >
         {/* Top Bar: Title, Language & Gamification Stats */}
-        <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 gap-4 w-full">
+        <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 gap-3 w-full">
           <div className="flex items-center gap-2 w-full sm:w-auto pl-12 sm:pl-0">
-            <Button variant="ghost" size="icon" onClick={onBack} className="text-slate-400 hover:text-rose-400 mr-2 shrink-0" title="Sair">
-              <LogOut className="w-6 h-6" />
+            <Button variant="ghost" size="icon" onClick={onBack} className="text-slate-400 hover:text-rose-400 mr-1 shrink-0" title="Sair">
+              <LogOut className="w-5 h-5" />
             </Button>
-            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight uppercase truncate">
+            <h1 className="text-base sm:text-lg font-black text-white tracking-tight uppercase truncate">
               App do Atleta <span className={theme.text}>Elleven</span>
             </h1>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar w-full sm:w-auto justify-center sm:justify-end py-1">
-            <div className={`flex items-center gap-2 ${theme.bgAlpha} px-3 py-1.5 rounded-full border ${theme.border} shrink-0`}>
-              <Trophy className={`w-4 h-4 sm:w-5 sm:h-5 ${theme.text}`} />
-              <span className={`text-xs sm:text-sm font-bold ${theme.icon}`}>
+          <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar w-full sm:w-auto justify-center sm:justify-end py-1">
+            <div className={`flex items-center gap-2 ${theme.bgAlpha} px-2.5 py-1 rounded-full border ${theme.border} shrink-0`}>
+              <Trophy className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${theme.text}`} />
+              <span className={`text-[10px] sm:text-xs font-bold ${theme.icon}`}>
                 Lvl {athleteLevel}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-yellow-500/20 px-3 py-1.5 rounded-full border border-yellow-500/30 shrink-0">
-              <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
-              <span className="text-xs sm:text-sm font-bold text-yellow-300">
+            <div className="flex items-center gap-2 bg-yellow-500/20 px-2.5 py-1 rounded-full border border-yellow-500/30 shrink-0">
+              <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" />
+              <span className="text-[10px] sm:text-xs font-bold text-yellow-300">
                 {currentCoins}
               </span>
             </div>
@@ -1185,17 +1185,17 @@ export function AthleteDashboard({
               variant="ghost"
               size="sm"
               onClick={toggleLang}
-              className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-sm"
+              className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-xs h-8 px-2"
             >
-              <Globe className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" />
               {lang === "pt" ? "EN" : "PT"}
             </Button>
           </div>
         </div>
 
-        <div className="text-center space-y-4 sm:space-y-6">
-          <div className="flex flex-col items-center justify-center gap-4 sm:gap-6">
-            <div className={`relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
+        <div className="text-center space-y-3 sm:space-y-4">
+          <div className="flex flex-col items-center justify-center gap-3 sm:gap-4">
+            <div className={`relative w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
               {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') ? (
                 <Image 
                   src={athleteData.avatar_url} 
@@ -1455,44 +1455,52 @@ export function AthleteDashboard({
 
         {/* Pain Map Summary Section */}
         <div className="space-y-4">
-          <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
-            <Activity className="w-6 h-6 text-rose-500" />
-            {lang === "pt" ? "Mapa de Dor" : "Pain Map"}
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
+              <Activity className="w-6 h-6 text-rose-500" />
+              {lang === "pt" ? "Mapa de Dor" : "Pain Map"}
+            </h3>
+            {Object.keys(latestPainMap).length > 0 && (
+              <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20 uppercase tracking-widest">
+                {Object.keys(latestPainMap).length} {lang === "pt" ? "Locais" : "Locations"}
+              </span>
+            )}
+          </div>
           
           <Card className="bg-slate-900/40 border-slate-800/50 overflow-hidden shadow-xl">
-            <CardContent className="p-0 flex flex-col md:flex-row items-center justify-center gap-8 py-8 px-6">
-              <div className="w-64 h-auto shrink-0">
-                <PainMap 
-                  value={latestPainMap} 
-                  readOnly={true}
-                />
-              </div>
-              <div className="flex-1 space-y-3 w-full">
-                {Object.keys(latestPainMap).length > 0 ? (
-                  Object.entries(latestPainMap).map(([part, data]) => (
-                    <div key={part} className="flex items-center justify-between gap-4 bg-slate-800/50 p-3 rounded-xl border border-slate-700/30 group hover:border-rose-500/30 transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)] ${data.level >= 7 ? 'bg-red-500' : data.level >= 4 ? 'bg-orange-500' : 'bg-yellow-500'}`}></div>
-                        <span className="text-xs font-bold text-white uppercase tracking-wider">{getPainLocationLabel(part)}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900 px-2 py-1 rounded-md">{data.type}</span>
-                        <span className="text-xs font-black text-white">Nível {data.level}</span>
-                      </div>
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
+                <div className="w-full max-w-[220px] shrink-0">
+                  <PainMap 
+                    value={latestPainMap} 
+                    readOnly={true}
+                  />
+                </div>
+                <div className="flex-1 space-y-4 w-full">
+                  <div className="flex flex-col gap-3">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.keys(latestPainMap).length > 0 ? (
+                        Object.entries(latestPainMap).map(([part, data]) => (
+                          <span 
+                            key={part}
+                            className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"
+                          >
+                            {getPainLocationLabel(part)}
+                            <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
+                          </span>
+                        ))
+                      ) : (
+                        <div className="w-full text-center py-8 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
+                          <CheckCircle2 className="w-8 h-8 text-emerald-500/20 mx-auto mb-2" />
+                          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                            {lang === "pt" ? "Nenhuma dor relatada" : "No pain reported"}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center p-12 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
-                    <CheckCircle2 className="w-10 h-10 text-emerald-500/20 mx-auto mb-3" />
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-                      {lang === "pt" ? "Nenhuma dor relatada" : "No pain reported"}
-                    </p>
-                    <p className="text-[10px] text-slate-600 mt-1 uppercase tracking-tighter">
-                      {lang === "pt" ? "Continue assim!" : "Keep it up!"}
-                    </p>
                   </div>
-                )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -2227,18 +2235,6 @@ export function AthleteDashboard({
       </div>
 
       <div className="flex flex-col items-center text-center space-y-4 sm:space-y-6">
-        {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') && (
-          <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all duration-500 hover:scale-105">
-            <Image 
-              src={athleteData.avatar_url} 
-              alt={athleteData.nickname || athleteData.name} 
-              fill 
-              className="object-cover"
-              unoptimized
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        )}
         <div className="space-y-2 sm:space-y-3">
           <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
             {lang === "pt" 
