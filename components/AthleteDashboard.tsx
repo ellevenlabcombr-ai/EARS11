@@ -457,23 +457,27 @@ export function AthleteDashboard({
       try {
         console.log("Fetching data for athleteId:", athleteId);
         let historyResponse = await supabase
-          .from("check_ins")
-          .select("id, created_at, record_date, readiness_score")
+          .from("wellness_records")
+          .select("id, created_at, record_date, readiness_score, soreness_location")
           .eq("athlete_id", athleteId)
-          .order("created_at", { ascending: false })
+          .order("record_date", { ascending: false })
           .limit(10)
           .abortSignal(controller.signal);
 
-        // Fallback if record_date column doesn't exist yet
-        if (historyResponse.error && historyResponse.error.code === '42703') {
-          console.warn("record_date column not found, falling back to created_at");
-          historyResponse = await supabase
+        // Fallback if wellness_records fetch fails or is empty, try check_ins
+        if (historyResponse.error || (historyResponse.data && historyResponse.data.length === 0)) {
+          console.warn("wellness_records empty or error, trying check_ins");
+          const checkInResp = await supabase
             .from("check_ins")
-            .select("id, created_at, readiness_score")
+            .select("id, created_at, record_date, readiness_score, soreness_location")
             .eq("athlete_id", athleteId)
             .order("created_at", { ascending: false })
             .limit(10)
             .abortSignal(controller.signal);
+          
+          if (!checkInResp.error) {
+            historyResponse = checkInResp;
+          }
         }
 
         const athleteResponse = await supabase
@@ -1079,30 +1083,50 @@ export function AthleteDashboard({
         new Date().toDateString();
     const currentReadiness = latestCheckIn?.readiness_score ?? 0;
 
-    const latestPainMap = (() => {
-      if (!latestCheckIn?.soreness_location) return {};
-      try {
-        const parsed = JSON.parse(latestCheckIn.soreness_location);
-        if (Array.isArray(parsed)) {
+    const latestPainMapData = (() => {
+      const raw = latestCheckIn?.soreness_location;
+      if (!raw || raw === 'Nenhuma') return {};
+      
+      // If it's already an object/array (Supabase auto-parsing)
+      if (typeof raw === 'object' && raw !== null) {
+        if (Array.isArray(raw)) {
           const map: Record<string, any> = {};
-          parsed.forEach(item => {
-            map[item.region] = { level: item.intensity, type: item.type || 'muscle' };
+          raw.forEach(item => {
+            map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
           });
           return map;
-        } else if (typeof parsed === 'object') {
-          return parsed;
         }
-      } catch (e) {
-        // Fallback for old comma-separated format
-        const parts = latestCheckIn.soreness_location.split(',').map((s: string) => s.trim());
-        const map: Record<string, any> = {};
-        parts.forEach((p: string) => {
-          if (p) map[p] = { level: latestCheckIn.muscle_soreness || 5, type: 'muscle' };
-        });
-        return map;
+        return raw;
+      }
+
+      // If it's a string, try parsing it
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const map: Record<string, any> = {};
+            parsed.forEach(item => {
+              map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
+            });
+            return map;
+          } else if (typeof parsed === 'object' && parsed !== null) {
+            return parsed;
+          }
+        } catch (e) {
+          // Not JSON, try split
+          const parts = raw.split(',').map((s: string) => s.trim());
+          const map: Record<string, any> = {};
+          parts.forEach((p: string) => {
+            if (p) map[p] = { level: latestCheckIn.muscle_soreness || 5, type: 'muscle' };
+          });
+          return map;
+        }
       }
       return {};
     })();
+
+    // Use state latestPainMap if local latestPainMapData is empty (fallback)
+    const finalPainMap = Object.keys(latestPainMapData).length > 0 ? latestPainMapData : latestPainMap;
 
     // Use real data if available, otherwise 0
     const currentXp = athleteData?.xp || 0;
@@ -1156,7 +1180,7 @@ export function AthleteDashboard({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto space-y-6 pb-12 pt-4"
+        className="max-w-3xl mx-auto space-y-4 pb-12 pt-2"
       >
         {/* Top Bar: Title, Language & Gamification Stats */}
         <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 gap-3 w-full">
@@ -1193,23 +1217,64 @@ export function AthleteDashboard({
           </div>
         </div>
 
+        {/* Pending Wellness Alert */}
+        {!hasCheckedInToday && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4 max-w-md mx-auto shadow-lg mb-6"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500/20 rounded-full shrink-0">
+                <Clock className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-400 mb-0.5">
+                  {lang === "pt" ? "Wellness Pendente" : "Pending Wellness"}
+                </h4>
+                <p className="text-[10px] text-amber-200/70 uppercase font-bold tracking-wider">
+                  {lang === "pt" ? "Preencha seu questionário diário" : "Fill out your daily questionnaire"}
+                </p>
+              </div>
+            </div>
+            <Button 
+              size="sm"
+              onClick={() => setView("questionnaire")}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold uppercase text-[10px] tracking-widest px-4"
+            >
+              {lang === "pt" ? "Preencher" : "Fill Out"}
+            </Button>
+          </motion.div>
+        )}
+
         <div className="text-center space-y-3 sm:space-y-4">
           <div className="flex flex-col items-center justify-center gap-3 sm:gap-4">
-            <div className={`relative w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
-              {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') ? (
-                <Image 
-                  src={athleteData.avatar_url} 
-                  alt={athleteData.name} 
-                  fill 
-                  className="object-cover"
-                  unoptimized
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className={`w-full h-full ${theme.bgAlpha} flex items-center justify-center`}>
-                  <User className={`w-12 h-12 sm:w-16 sm:h-16 ${theme.icon}`} />
+            <div className={`relative w-20 h-20 sm:w-28 sm:h-28 rounded-full border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
+              <div className="absolute inset-0 rounded-full overflow-hidden">
+                {(athleteData?.avatar_url && athleteData.avatar_url.trim() !== '') ? (
+                  <Image 
+                    src={athleteData.avatar_url} 
+                    alt={athleteData.name} 
+                    fill 
+                    className="object-cover"
+                    unoptimized
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className={`w-full h-full ${theme.bgAlpha} flex items-center justify-center`}>
+                    <User className={`w-12 h-12 sm:w-16 sm:h-16 ${theme.icon}`} />
+                  </div>
+                )}
+              </div>
+              
+              {/* Readiness Badge next to photo */}
+              <div className="absolute -bottom-1 -right-1 bg-slate-900 p-1 rounded-full border-2 border-slate-800 shadow-xl z-20">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex flex-col items-center justify-center border ${currentReadiness >= 80 ? 'border-emerald-500/50 bg-emerald-500/10' : currentReadiness >= 50 ? 'border-amber-500/50 bg-amber-500/10' : 'border-red-500/50 bg-red-500/10'}`}>
+                  <span className={`text-[10px] sm:text-xs font-black ${currentReadiness >= 80 ? 'text-emerald-400' : currentReadiness >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {currentReadiness}%
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
               <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
@@ -1316,101 +1381,43 @@ export function AthleteDashboard({
           </>
         )}
 
-        {/* Readiness Gauge & Main Action */}
-        <div className="bg-gradient-to-b from-slate-900/80 to-slate-900/40 p-8 rounded-3xl border border-slate-800/50 relative overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.2)]">
-          <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${theme.gradientFrom} ${theme.gradientVia} ${theme.gradientTo} opacity-50`}></div>
+        {/* Main Action Section */}
+        <div className="flex flex-col gap-4 max-w-md mx-auto w-full">
+          <Button
+            size="lg"
+            onClick={() => setView("questionnaire")}
+            disabled={hasCheckedInToday}
+            className={`w-full font-black uppercase tracking-widest ${theme.shadowStrong} py-8 text-lg rounded-2xl transition-all ${
+              hasCheckedInToday
+                ? "bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700"
+                : `${theme.button} text-white hover:scale-105`
+            }`}
+          >
+            {hasCheckedInToday ? (
+              <>
+                <CheckCircle2 className="w-6 h-6 mr-3 text-green-400" />
+                {lang === "pt" ? "Check-in Concluído" : "Check-in Complete"}
+              </>
+            ) : (
+              <>
+                <Zap className="w-6 h-6 mr-3 text-yellow-400" />
+                {lang === "pt"
+                  ? "Fazer Check-in (+50 XP)"
+                  : "Do Check-in (+50 XP)"}
+              </>
+            )}
+          </Button>
 
-          <div className="flex flex-col items-center justify-center space-y-6">
-            {/* Circular Gauge */}
-            <div className="relative w-64 h-64 flex items-center justify-center">
-              <svg
-                className="w-full h-full transform -rotate-90"
-                viewBox="0 0 100 100"
-              >
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="42"
-                  fill="transparent"
-                  stroke="#1e293b"
-                  strokeWidth="6"
-                />
-                <motion.circle
-                  cx="50"
-                  cy="50"
-                  r="42"
-                  fill="transparent"
-                  stroke={
-                    currentReadiness >= 80
-                      ? "#22c55e"
-                      : currentReadiness >= 50
-                        ? "#eab308"
-                        : "#ef4444"
-                  }
-                  strokeWidth="8"
-                  strokeDasharray="263.9"
-                  strokeDashoffset={263.9 - (currentReadiness / 100) * 263.9}
-                  strokeLinecap="round"
-                  initial={{ strokeDashoffset: 263.9 }}
-                  animate={{
-                    strokeDashoffset: 263.9 - (currentReadiness / 100) * 263.9,
-                  }}
-                  transition={{ duration: 1.5, ease: "easeOut" }}
-                />
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center">
-                <span className="text-7xl font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]">
-                  {currentReadiness}
-                </span>
-                <span className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">
-                  {lang === "pt" ? "Prontidão" : "Readiness"}
-                </span>
-                {athleteGender === "F" && (
-                  <span className="text-xs font-bold text-rose-400 mt-2 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
-                    {lang === "pt" ? "-5% Ciclo" : "-5% Cycle"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 w-full sm:w-auto">
-              <Button
-                size="lg"
-                onClick={() => setView("questionnaire")}
-                disabled={hasCheckedInToday}
-                className={`w-full font-black uppercase tracking-widest ${theme.shadowStrong} py-8 text-lg rounded-2xl transition-all ${
-                  hasCheckedInToday
-                    ? "bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700"
-                    : `${theme.button} text-white hover:scale-105`
-                }`}
-              >
-                {hasCheckedInToday ? (
-                  <>
-                    <CheckCircle2 className="w-6 h-6 mr-3 text-green-400" />
-                    {lang === "pt" ? "Check-in Concluído" : "Check-in Complete"}
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-6 h-6 mr-3 text-yellow-400" />
-                    {lang === "pt"
-                      ? "Fazer Check-in (+50 XP)"
-                      : "Do Check-in (+50 XP)"}
-                  </>
-                )}
-              </Button>
-              
-              {athleteGender === "F" && (
-                <Button
-                  size="lg"
-                  onClick={() => setView("cycle")}
-                  className={`w-full font-black uppercase tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.3)] py-6 text-md rounded-2xl transition-all bg-rose-900/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/60 hover:scale-105`}
-                >
-                  <Droplets className="w-5 h-5 mr-3 text-rose-400" />
-                  {lang === "pt" ? "Meu Ciclo" : "My Cycle"}
-                </Button>
-              )}
-            </div>
-          </div>
+          {athleteGender === "F" && (
+            <Button
+              size="lg"
+              onClick={() => setView("cycle")}
+              className={`w-full font-black uppercase tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.3)] py-6 text-md rounded-2xl transition-all bg-rose-900/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/60 hover:scale-105`}
+            >
+              <Droplets className="w-5 h-5 mr-3 text-rose-400" />
+              {lang === "pt" ? "Meu Ciclo" : "My Cycle"}
+            </Button>
+          )}
         </div>
 
         {/* Wellness Summary Section */}
@@ -1460,9 +1467,9 @@ export function AthleteDashboard({
               <Activity className="w-6 h-6 text-rose-500" />
               {lang === "pt" ? "Mapa de Dor" : "Pain Map"}
             </h3>
-            {Object.keys(latestPainMap).length > 0 && (
+            {Object.keys(finalPainMap).length > 0 && (
               <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20 uppercase tracking-widest">
-                {Object.keys(latestPainMap).length} {lang === "pt" ? "Locais" : "Locations"}
+                {Object.keys(finalPainMap).length} {lang === "pt" ? "Locais" : "Locations"}
               </span>
             )}
           </div>
@@ -1472,7 +1479,7 @@ export function AthleteDashboard({
               <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
                 <div className="w-full max-w-[220px] shrink-0">
                   <PainMap 
-                    value={latestPainMap} 
+                    value={finalPainMap} 
                     readOnly={true}
                   />
                 </div>
@@ -1480,8 +1487,8 @@ export function AthleteDashboard({
                   <div className="flex flex-col gap-3">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
                     <div className="flex flex-wrap gap-2">
-                      {Object.keys(latestPainMap).length > 0 ? (
-                        Object.entries(latestPainMap).map(([part, data]) => (
+                      {Object.keys(finalPainMap).length > 0 ? (
+                        Object.entries(finalPainMap).map(([part, data]) => (
                           <span 
                             key={part}
                             className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"

@@ -196,7 +196,7 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
         // 1. Fetch athletes first (limit to 50 to ensure performance)
         const { data: athletesData, error: athletesError } = await supabase
           .from('athletes')
-          .select('id, athlete_code, name, gender, category, avatar_url, last_period_date, cycle_length, is_menstruating')
+          .select('id, athlete_code, name, gender, category, avatar_url, last_period_date, cycle_length, is_menstruating, phone')
           .limit(50)
           .abortSignal(controller.signal);
 
@@ -236,19 +236,63 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
         // Helper to parse pain map
         const getPainMap = (record: any) => {
           if (!record || !record.soreness_location || record.soreness_location === 'Nenhuma') return {};
-          try {
-            const parsed = JSON.parse(record.soreness_location);
-            if (Array.isArray(parsed)) {
-              const map: Record<string, number> = {};
-              parsed.forEach(item => map[item.region] = item.intensity);
+          const raw = record.soreness_location;
+          
+          // If it's already an object/array (Supabase auto-parsing)
+          if (typeof raw === 'object' && raw !== null) {
+            const map: Record<string, { level: number; type: string }> = {};
+            if (Array.isArray(raw)) {
+              raw.forEach(item => {
+                map[item.region] = { 
+                  level: item.intensity || item.level || 5, 
+                  type: item.type || 'muscle' 
+                };
+              });
               return map;
-            } else if (typeof parsed === 'object') {
-              const map: Record<string, number> = {};
-              Object.entries(parsed).forEach(([loc, data]: [string, any]) => map[loc] = data.level);
+            } else {
+              Object.entries(raw).forEach(([loc, data]: [string, any]) => {
+                if (typeof data === 'object' && data !== null) {
+                  map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
+                } else {
+                  map[loc] = { level: Number(data) || 5, type: 'muscle' };
+                }
+              });
               return map;
             }
-          } catch (e) {
-            return {};
+          }
+
+          if (typeof raw === 'string') {
+            try {
+              const parsed = JSON.parse(raw);
+              const map: Record<string, { level: number; type: string }> = {};
+              
+              if (Array.isArray(parsed)) {
+                parsed.forEach(item => {
+                  map[item.region] = { 
+                    level: item.intensity || item.level || 5, 
+                    type: item.type || 'muscle' 
+                  };
+                });
+                return map;
+              } else if (typeof parsed === 'object' && parsed !== null) {
+                Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
+                  if (typeof data === 'object' && data !== null) {
+                    map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
+                  } else {
+                    map[loc] = { level: Number(data) || 5, type: 'muscle' };
+                  }
+                });
+                return map;
+              }
+            } catch (e) {
+              // Fallback for comma-separated string
+              const parts = raw.split(',').map((s: string) => s.trim());
+              const map: Record<string, { level: number; type: string }> = {};
+              parts.forEach((p: string) => {
+                if (p) map[p] = { level: record.muscle_soreness || 5, type: 'muscle' };
+              });
+              return map;
+            }
           }
           return {};
         };
@@ -323,7 +367,8 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
             daysLate,
             painAlerts,
             critical: (readiness !== null && readiness < 70) || isPeriodLate || painAlerts.length > 0,
-            trend: readiness !== null ? (readiness > 80 ? 'up' : readiness < 70 ? 'down' : 'stable') : null
+            trend: readiness !== null ? (readiness > 80 ? 'up' : readiness < 70 ? 'down' : 'stable') : null,
+            phone: athlete.phone
           };
         });
 
@@ -412,6 +457,43 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
     }
   };
 
+  const handleWhatsAppNotify = (athlete: any) => {
+    if (!athlete.phone) {
+      alert(`O atleta ${athlete.name} não possui telefone cadastrado.`);
+      return;
+    }
+
+    // Clean phone number (remove non-digits)
+    const cleanPhone = athlete.phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      alert(`O telefone cadastrado para ${athlete.name} parece inválido.`);
+      return;
+    }
+
+    const message = `Olá ${athlete.name}, notamos que você ainda não preencheu seu wellness hoje. Por favor, reserve 1 minuto para atualizar seus dados.`;
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone}?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleNotifyAllPending = () => {
+    const pendingAthletes = athletes.filter(a => a.status === 'pending');
+    if (pendingAthletes.length === 0) {
+      alert('Não há atletas pendentes para notificar.');
+      return;
+    }
+
+    if (window.confirm(`Deseja abrir o WhatsApp para notificar ${pendingAthletes.length} atletas? Os links serão abertos um por um.`)) {
+      pendingAthletes.forEach((athlete, index) => {
+        // Delay each open slightly to avoid browser blocking multiple popups
+        setTimeout(() => {
+          handleWhatsAppNotify(athlete);
+        }, index * 1000);
+      });
+    }
+  };
+
   const filteredAthletes = athletes.filter(athlete => {
     if (filter === 'completed' && athlete.status !== 'completed') return false;
     if (filter === 'pending' && athlete.status !== 'pending') return false;
@@ -461,7 +543,11 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
               {isClearing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
               Limpar Dados
             </Button>
-            <Button variant="outline" className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-bold uppercase text-[10px] tracking-widest">
+            <Button 
+              variant="outline" 
+              onClick={handleNotifyAllPending}
+              className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-bold uppercase text-[10px] tracking-widest"
+            >
               <Bell className="w-4 h-4 mr-2" />
               Notificar Pendentes
             </Button>
@@ -909,6 +995,7 @@ ANALYZE check_ins;`}
                           <Button 
                             variant="outline" 
                             size="sm"
+                            onClick={() => handleWhatsAppNotify(athlete)}
                             className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 font-bold uppercase text-[10px] tracking-widest"
                           >
                             <Bell className="w-3 h-3 mr-1" /> Cobrar
@@ -1051,33 +1138,52 @@ ANALYZE check_ins;`}
                     </div>
                     <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Dor Muscular e Mapa de Dor</p>
                   </div>
-                  <div className="flex flex-col md:flex-row gap-6 items-center justify-center">
-                    <div className="w-full max-w-[200px] shrink-0">
-                      <PainMap 
-                        value={(() => {
-                          if (!selectedAnswers.sorenessLocation || selectedAnswers.sorenessLocation === 'Nenhuma') return {};
-                          try {
-                            const parsed = JSON.parse(selectedAnswers.sorenessLocation);
-                            if (Array.isArray(parsed)) {
-                              const map: Record<string, any> = {};
-                              parsed.forEach(item => map[item.region] = { level: item.intensity, type: item.type || 'muscle' });
-                              return map;
-                            } else if (typeof parsed === 'object') {
-                              return parsed;
-                            }
-                          } catch (e) {
-                            const parts = selectedAnswers.sorenessLocation.split(',').map((s: string) => s.trim());
-                            const map: Record<string, any> = {};
-                            parts.forEach((p: string) => {
-                              if (p) map[p] = { level: selectedAnswers.soreness || 5, type: 'muscle' };
-                            });
-                            return map;
-                          }
-                          return {};
-                        })()}
-                        readOnly={true}
-                      />
-                    </div>
+                      <div className="flex flex-col md:flex-row gap-6 items-center justify-center">
+                        <div className="w-full max-w-[200px] shrink-0">
+                          <PainMap 
+                            value={(() => {
+                              if (!selectedAnswers.sorenessLocation || selectedAnswers.sorenessLocation === 'Nenhuma') return {};
+                              try {
+                                const parsed = JSON.parse(selectedAnswers.sorenessLocation);
+                                const map: Record<string, { level: number; type: string }> = {};
+                                
+                                if (Array.isArray(parsed)) {
+                                  parsed.forEach(item => {
+                                    map[item.region] = { 
+                                      level: item.intensity || item.level || 5, 
+                                      type: item.type || 'muscle' 
+                                    };
+                                  });
+                                  return map;
+                                } else if (typeof parsed === 'object' && parsed !== null) {
+                                  Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
+                                    if (typeof data === 'object' && data !== null) {
+                                      map[loc] = { 
+                                        level: data.level || 5, 
+                                        type: data.type || 'muscle' 
+                                      };
+                                    } else {
+                                      map[loc] = { 
+                                        level: Number(data) || 5, 
+                                        type: 'muscle' 
+                                      };
+                                    }
+                                  });
+                                  return map;
+                                }
+                              } catch (e) {
+                                const parts = selectedAnswers.sorenessLocation.split(',').map((s: string) => s.trim());
+                                const map: Record<string, { level: number; type: string }> = {};
+                                parts.forEach((p: string) => {
+                                  if (p) map[p] = { level: selectedAnswers.soreness || 5, type: 'muscle' };
+                                });
+                                return map;
+                              }
+                              return {};
+                            })()}
+                            readOnly={true}
+                          />
+                        </div>
                     <div className="flex-1 space-y-4 w-full">
                       <div className="flex justify-between items-end">
                         <p className="text-sm text-slate-500">Intensidade Geral</p>
@@ -1099,17 +1205,17 @@ ANALYZE check_ins;`}
                                       className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
                                     >
                                       {getPainLocationLabel(item.region)}
-                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {item.intensity}</span>
+                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {item.intensity || item.level || 5}</span>
                                     </span>
                                   ));
-                                } else if (typeof parsed === 'object') {
+                                } else if (typeof parsed === 'object' && parsed !== null) {
                                   return Object.entries(parsed).map(([loc, data]: [string, any]) => (
                                     <span 
                                       key={loc}
                                       className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
                                     >
                                       {getPainLocationLabel(loc)}
-                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
+                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {typeof data === 'object' ? data.level : data}</span>
                                     </span>
                                   ));
                                 }
@@ -1117,9 +1223,10 @@ ANALYZE check_ins;`}
                                 return selectedAnswers.sorenessLocation.split(',').map((loc: string) => (
                                   <span 
                                     key={loc}
-                                    className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider"
+                                    className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
                                   >
                                     {getPainLocationLabel(loc.trim())}
+                                    <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {selectedAnswers.soreness || 5}</span>
                                   </span>
                                 ));
                               }
