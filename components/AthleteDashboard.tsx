@@ -1869,17 +1869,17 @@ export function AthleteDashboard({
                     <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-4">
                       <div className="flex justify-between items-end">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
-                        <p className={`text-2xl font-black ${answers.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {answers.muscle_soreness}/10
+                        <p className={`text-2xl font-black ${Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level))}/10
                         </p>
                       </div>
                       <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${
-                            answers.muscle_soreness <= 3 ? 'bg-emerald-500' : 
-                            answers.muscle_soreness <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
+                            Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) <= 3 ? 'bg-emerald-500' : 
+                            Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
                           }`}
-                          style={{ width: `${(answers.muscle_soreness / 10) * 100}%` }}
+                          style={{ width: `${(Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) / 10) * 100}%` }}
                         />
                       </div>
                     </div>

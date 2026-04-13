@@ -596,7 +596,7 @@ export function PainMap({
 
   return (
     <div className="relative w-full">
-      <div className="flex flex-col sm:flex-row justify-center gap-8 items-center">
+      <div className="flex flex-col lg:flex-row justify-center gap-8 items-center">
         <div className="text-center w-full">
           <div className="inline-flex items-center justify-center space-x-2 mb-4 bg-slate-900 px-4 py-1.5 rounded-full border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
             <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />

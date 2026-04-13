@@ -87,6 +87,69 @@ const getPainLocationLabel = (id: string): string => {
   return mapping[id.trim()] || id.trim().replace(/_/g, " ");
 };
 
+const getPainMap = (record: any) => {
+  if (!record || !record.soreness_location || record.soreness_location === 'Nenhuma') return {};
+  const raw = record.soreness_location;
+  
+  // If it's already an object/array (Supabase auto-parsing)
+  if (typeof raw === 'object' && raw !== null) {
+    const map: Record<string, { level: number; type: string }> = {};
+    if (Array.isArray(raw)) {
+      raw.forEach(item => {
+        map[item.region] = { 
+          level: item.intensity || item.level || 5, 
+          type: item.type || 'muscle' 
+        };
+      });
+      return map;
+    } else {
+      Object.entries(raw).forEach(([loc, data]: [string, any]) => {
+        if (typeof data === 'object' && data !== null) {
+          map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
+        } else {
+          map[loc] = { level: Number(data) || 5, type: 'muscle' };
+        }
+      });
+      return map;
+    }
+  }
+
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      const map: Record<string, { level: number; type: string }> = {};
+      
+      if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+          map[item.region] = { 
+            level: item.intensity || item.level || 5, 
+            type: item.type || 'muscle' 
+          };
+        });
+        return map;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
+          if (typeof data === 'object' && data !== null) {
+            map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
+          } else {
+            map[loc] = { level: Number(data) || 5, type: 'muscle' };
+          }
+        });
+        return map;
+      }
+    } catch (e) {
+      // Fallback for comma-separated string
+      const parts = raw.split(',').map((s: string) => s.trim());
+      const map: Record<string, { level: number; type: string }> = {};
+      parts.forEach((p: string) => {
+        if (p) map[p] = { level: record.muscle_soreness || 5, type: 'muscle' };
+      });
+      return map;
+    }
+  }
+  return {};
+};
+
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg 
     viewBox="0 0 24 24" 
@@ -310,70 +373,6 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
         
         console.log('Wellness records fetched:', wellnessData.length);
 
-        // Helper to parse pain map
-        const getPainMap = (record: any) => {
-          if (!record || !record.soreness_location || record.soreness_location === 'Nenhuma') return {};
-          const raw = record.soreness_location;
-          
-          // If it's already an object/array (Supabase auto-parsing)
-          if (typeof raw === 'object' && raw !== null) {
-            const map: Record<string, { level: number; type: string }> = {};
-            if (Array.isArray(raw)) {
-              raw.forEach(item => {
-                map[item.region] = { 
-                  level: item.intensity || item.level || 5, 
-                  type: item.type || 'muscle' 
-                };
-              });
-              return map;
-            } else {
-              Object.entries(raw).forEach(([loc, data]: [string, any]) => {
-                if (typeof data === 'object' && data !== null) {
-                  map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
-                } else {
-                  map[loc] = { level: Number(data) || 5, type: 'muscle' };
-                }
-              });
-              return map;
-            }
-          }
-
-          if (typeof raw === 'string') {
-            try {
-              const parsed = JSON.parse(raw);
-              const map: Record<string, { level: number; type: string }> = {};
-              
-              if (Array.isArray(parsed)) {
-                parsed.forEach(item => {
-                  map[item.region] = { 
-                    level: item.intensity || item.level || 5, 
-                    type: item.type || 'muscle' 
-                  };
-                });
-                return map;
-              } else if (typeof parsed === 'object' && parsed !== null) {
-                Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
-                  if (typeof data === 'object' && data !== null) {
-                    map[loc] = { level: data.level || 5, type: data.type || 'muscle' };
-                  } else {
-                    map[loc] = { level: Number(data) || 5, type: 'muscle' };
-                  }
-                });
-                return map;
-              }
-            } catch (e) {
-              // Fallback for comma-separated string
-              const parts = raw.split(',').map((s: string) => s.trim());
-              const map: Record<string, { level: number; type: string }> = {};
-              parts.forEach((p: string) => {
-                if (p) map[p] = { level: record.muscle_soreness || 5, type: 'muscle' };
-              });
-              return map;
-            }
-          }
-          return {};
-        };
-
         // Map data
         const mappedAthletes = athletes.map(athlete => {
           const record = wellnessData.find(r => r.athlete_id === athlete.id);
@@ -422,6 +421,12 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
           }
           
           const painMapData = getPainMap(record);
+          
+          // Debug log for specific athlete
+          if (record) {
+            console.log(`Record for ${athlete.name}:`, record);
+          }
+
           const painValues = Object.values(painMapData).map((p: any) => p.level);
           const maxPainFromMap = painValues.length > 0 ? Math.max(...painValues) : 0;
           const finalSoreness = record ? Math.max(record.muscle_soreness || 0, maxPainFromMap) : null;
@@ -1335,8 +1340,8 @@ ANALYZE check_ins;`}
                       <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-4">
                         <div className="flex justify-between items-end">
                           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
-                          <p className={`text-2xl font-black ${selectedAnswers.soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            {selectedAnswers.soreness}/10
+                          <p className={`text-2xl font-black ${Math.max(selectedAnswers.soreness || 0, ...Object.values(getPainMap(selectedAnswers)).map(p => p.level)) > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {Math.max(selectedAnswers.soreness || 0, ...Object.values(getPainMap(selectedAnswers)).map(p => p.level))}/10
                           </p>
                         </div>
                         <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -1526,9 +1531,25 @@ ANALYZE check_ins;`}
                   </div>
                 </div>
 
+                {/* Pre-Training Meal */}
+                <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-amber-500/10 rounded-lg">
+                      <Utensils className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Refeição Pré-Treino</p>
+                  </div>
+                  <div className="flex justify-between items-end h-[44px]">
+                    <p className="text-sm text-slate-500">Qualidade (1-5)</p>
+                    <p className={`text-2xl font-black ${selectedAnswers.preTrainingMeal < 3 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {selectedAnswers.preTrainingMeal || '-'}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Confidence & Recovery */}
                 <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50 sm:col-span-2">
-                  <div className="grid grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                     <div>
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-blue-500/10 rounded-lg">
@@ -1546,6 +1567,15 @@ ANALYZE check_ins;`}
                         <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Recuperação</p>
                       </div>
                       <p className="text-2xl font-black text-white">{selectedAnswers.trainingRecovery || '-'}/5</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-emerald-500/10 rounded-lg">
+                          <Heart className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Bem-estar</p>
+                      </div>
+                      <p className="text-2xl font-black text-white">{selectedAnswers.overallWellbeing || '-'}/5</p>
                     </div>
                   </div>
                 </div>
