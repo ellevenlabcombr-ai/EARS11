@@ -413,7 +413,7 @@ export function PainMap({
   const renderBody = (isFront: boolean) => {
     const parts = bodyParts.filter((p) => (isFront ? p.front : p.back));
     return (
-      <div className="relative w-full max-w-[240px] md:max-w-[300px] lg:max-w-[360px] mx-auto aspect-[1/2] bg-slate-950 rounded-3xl overflow-hidden border border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)] group">
+      <div className={`relative w-full ${readOnly ? 'max-w-[180px] sm:max-w-[220px]' : 'max-w-[240px] md:max-w-[300px]'} mx-auto aspect-[1/2.2] bg-slate-950 rounded-3xl overflow-hidden border border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)] group`}>
         {/* Sci-Fi Grid Background */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.1)_1px,transparent_1px)] bg-[size:20px_20px] opacity-50" />
 
@@ -429,7 +429,7 @@ export function PainMap({
 
         <svg
           viewBox="0 0 200 400"
-          className="relative z-10 w-full h-full drop-shadow-2xl p-4"
+          className="relative z-10 w-full h-full drop-shadow-2xl p-2 sm:p-4"
         >
           <defs>
             <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">

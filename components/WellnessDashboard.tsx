@@ -22,7 +22,14 @@ import {
   Moon,
   Loader2,
   Droplets,
-  Info
+  Info,
+  Smile,
+  Apple,
+  Utensils,
+  RefreshCcw,
+  Target,
+  Dumbbell,
+  Heart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,47 +42,47 @@ interface WellnessDashboardProps {
 
 const getPainLocationLabel = (id: string): string => {
   const mapping: Record<string, string> = {
-    head_f: "Cabeça (F)",
-    neck_f: "Pescoço (F)",
+    head_f: "Cabeça (Frontal)",
+    neck_f: "Pescoço (Frontal)",
     chest: "Peitoral",
     abs: "Abdômen",
-    shoulder_l_f: "Ombro Esq. (F)",
-    shoulder_r_f: "Ombro Dir. (F)",
-    biceps_l_f: "Bíceps Esq.",
-    biceps_r_f: "Bíceps Dir.",
-    forearm_l_f: "Antebraço Esq.",
-    forearm_r_f: "Antebraço Dir.",
-    hand_l_f: "Mão Esq.",
-    hand_r_f: "Mão Dir.",
+    shoulder_l_f: "Ombro Esquerdo (Frontal)",
+    shoulder_r_f: "Ombro Direito (Frontal)",
+    biceps_l_f: "Bíceps Esquerdo",
+    biceps_r_f: "Bíceps Direito",
+    forearm_l_f: "Antebraço Esquerdo",
+    forearm_r_f: "Antebraço Direito",
+    hand_l_f: "Mão Esquerda",
+    hand_r_f: "Mão Direita",
     pelvis_f: "Pelve / Oblíquos",
-    thigh_l_f: "Coxa Esq. (Anterior)",
-    thigh_r_f: "Coxa Dir. (Anterior)",
-    knee_l_f: "Joelho Esq.",
-    knee_r_f: "Joelho Dir.",
-    calf_l_f: "Canela Esq.",
-    calf_r_f: "Canela Dir.",
-    foot_l_f: "Pé Esq.",
-    foot_r_f: "Pé Dir.",
-    head_b: "Cabeça (P)",
-    neck_b: "Pescoço (P)",
-    upper_back: "Trapézio",
+    thigh_l_f: "Coxa Esquerda (Anterior)",
+    thigh_r_f: "Coxa Direita (Anterior)",
+    knee_l_f: "Joelho Esquerdo",
+    knee_r_f: "Joelho Direito",
+    calf_l_f: "Canela Esquerda",
+    calf_r_f: "Canela Direita",
+    foot_l_f: "Pé Esquerdo",
+    foot_r_f: "Pé Direito",
+    head_b: "Cabeça (Posterior)",
+    neck_b: "Pescoço (Posterior)",
+    upper_back: "Trapézio / Costas Superior",
     lats: "Dorsais",
     lower_back: "Lombar",
-    shoulder_l_b: "Ombro Esq. (P)",
-    shoulder_r_b: "Ombro Dir. (P)",
-    triceps_l_b: "Tríceps Esq.",
-    triceps_r_b: "Tríceps Dir.",
-    forearm_l_b: "Antebraço Esq. (P)",
-    forearm_r_b: "Antebraço Dir. (P)",
-    hand_l_b: "Mão Esq. (P)",
-    hand_r_b: "Mão Dir. (P)",
+    shoulder_l_b: "Ombro Esquerdo (Posterior)",
+    shoulder_r_b: "Ombro Direito (Posterior)",
+    triceps_l_b: "Tríceps Esquerdo",
+    triceps_r_b: "Tríceps Direito",
+    forearm_l_b: "Antebraço Esquerdo (Posterior)",
+    forearm_r_b: "Antebraço Direito (Posterior)",
+    hand_l_b: "Mão Esquerda (Posterior)",
+    hand_r_b: "Mão Direita (Posterior)",
     glutes: "Glúteos",
-    hamstring_l_b: "Coxa Esq. (P)",
-    hamstring_r_b: "Coxa Dir. (P)",
-    calf_l_b: "Panturrilha Esq.",
-    calf_r_b: "Panturrilha Dir.",
-    foot_l_b: "Calcanhar Esq.",
-    foot_r_b: "Calcanhar Dir.",
+    hamstring_l_b: "Coxa Esquerda (Posterior)",
+    hamstring_r_b: "Coxa Direita (Posterior)",
+    calf_l_b: "Panturrilha Esquerda",
+    calf_r_b: "Panturrilha Direita",
+    foot_l_b: "Calcanhar Esquerdo",
+    foot_r_b: "Calcanhar Direito",
   };
   return mapping[id.trim()] || id.trim().replace(/_/g, " ");
 };
@@ -157,13 +164,52 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
           soreness_location TEXT,
           stress_level INTEGER,
           readiness_score INTEGER,
-          menstrual_cycle TEXT,
-          menstrual_symptoms TEXT[],
-          hydration_perception NUMERIC,
-          hydration_score NUMERIC,
-          comments TEXT,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+
+        -- Garantir que as novas colunas existam
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='mood') THEN
+                ALTER TABLE wellness_records ADD COLUMN mood INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='nutrition') THEN
+                ALTER TABLE wellness_records ADD COLUMN nutrition INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='pre_training_meal') THEN
+                ALTER TABLE wellness_records ADD COLUMN pre_training_meal INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='training_recovery') THEN
+                ALTER TABLE wellness_records ADD COLUMN training_recovery INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='confidence') THEN
+                ALTER TABLE wellness_records ADD COLUMN confidence INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='overall_wellbeing') THEN
+                ALTER TABLE wellness_records ADD COLUMN overall_wellbeing INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='hydration_perception') THEN
+                ALTER TABLE wellness_records ADD COLUMN hydration_perception NUMERIC;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='hydration_score') THEN
+                ALTER TABLE wellness_records ADD COLUMN hydration_score NUMERIC;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='urine_color') THEN
+                ALTER TABLE wellness_records ADD COLUMN urine_color INTEGER;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='symptoms') THEN
+                ALTER TABLE wellness_records ADD COLUMN symptoms JSONB DEFAULT '{}'::jsonb;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='menstrual_cycle') THEN
+                ALTER TABLE wellness_records ADD COLUMN menstrual_cycle TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='menstrual_symptoms') THEN
+                ALTER TABLE wellness_records ADD COLUMN menstrual_symptoms TEXT[];
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_records' AND column_name='comments') THEN
+                ALTER TABLE wellness_records ADD COLUMN comments TEXT;
+            END IF;
+        END $$;
 
         -- Desabilitar RLS para evitar erros de permissão
         ALTER TABLE check_ins DISABLE ROW LEVEL SECURITY;
@@ -181,12 +227,32 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
         ANALYZE check_ins;
       `;
       // @ts-ignore
-      await supabase.rpc('exec_sql', { sql: sql.trim() });
+      const { error: rpcError } = await supabase.rpc('exec_sql', { sql: sql.trim() });
+      
+      if (rpcError) {
+        console.error('Erro ao executar RPC exec_sql:', rpcError);
+        if (rpcError.message?.includes('function public.exec_sql(text) does not exist')) {
+          setLastError({
+            message: 'Função de sistema (exec_sql) ausente no Supabase.',
+            code: 'RPC_MISSING',
+            details: 'A função RPC "exec_sql" não foi encontrada. Você precisa criá-la manualmente no SQL Editor do Supabase.',
+            hint: 'Copie o código SQL no painel de Debug e execute-o no SQL Editor do Supabase.'
+          });
+          return;
+        }
+        throw rpcError;
+      }
+
       console.log('Auto-Fix concluído com sucesso.');
       if (fetchRef.current) fetchRef.current();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro no Auto-Fix automático:', err);
-      // Se falhar o auto-fix, mostramos o erro original
+      setLastError({
+        message: 'Falha ao otimizar o banco de dados.',
+        code: err?.code || 'AUTO_FIX_ERROR',
+        details: err?.message || JSON.stringify(err),
+        hint: 'Tente executar o SQL manualmente no painel de Debug.'
+      });
     } finally {
       setIsAutoFixing(false);
     }
@@ -229,7 +295,7 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
 
           const { data, error: wellnessError } = await supabase
             .from('wellness_records')
-            .select('athlete_id, record_date, readiness_score, sleep_hours, sleep_quality, muscle_soreness, soreness_location, fatigue_level, stress_level, comments, menstrual_cycle, menstrual_symptoms, urine_color, symptoms')
+            .select('athlete_id, record_date, readiness_score, sleep_hours, sleep_quality, muscle_soreness, soreness_location, fatigue_level, stress_level, mood, nutrition, pre_training_meal, training_recovery, confidence, overall_wellbeing, comments, menstrual_cycle, menstrual_symptoms, urine_color, symptoms, hydration_perception, hydration_score')
             .gte('record_date', threeDaysAgoStr)
             .lte('record_date', today)
             .in('athlete_id', athleteIds)
@@ -355,6 +421,11 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
             }
           }
           
+          const painMapData = getPainMap(record);
+          const painValues = Object.values(painMapData).map((p: any) => p.level);
+          const maxPainFromMap = painValues.length > 0 ? Math.max(...painValues) : 0;
+          const finalSoreness = record ? Math.max(record.muscle_soreness || 0, maxPainFromMap) : null;
+          
           return {
             id: athlete.id,
             athlete_code: athlete.athlete_code,
@@ -366,10 +437,18 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
             readiness: readiness,
             sleep: record ? record.sleep_hours : null,
             sleepQuality: record ? (record.sleep_quality > 3 ? 'Boa' : 'Regular') : null,
-            soreness: record ? record.muscle_soreness : null,
+            soreness: finalSoreness,
             sorenessLocation: record ? record.soreness_location || 'Nenhuma' : null,
             fatigue: record ? record.fatigue_level : null,
             stress: record ? record.stress_level : null,
+            mood: record ? record.mood : null,
+            nutrition: record ? record.nutrition : null,
+            preTrainingMeal: record ? record.pre_training_meal : null,
+            trainingRecovery: record ? record.training_recovery : null,
+            confidence: record ? record.confidence : null,
+            overallWellbeing: record ? record.overall_wellbeing : null,
+            hydration_perception: record ? record.hydration_perception : null,
+            urine_color: record ? record.urine_color : null,
             comments: record ? record.comments : '',
             symptoms: record ? record.symptoms : {},
             menstrualCycle: record ? record.menstrual_cycle : null,
@@ -525,13 +604,13 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
 
   const getReadinessColor = (score: number | null) => {
     if (score === null) return "text-slate-500 bg-slate-800/50";
-    if (score >= 80) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
-    if (score >= 70) return "text-amber-400 bg-amber-500/10 border-amber-500/20";
+    if (score >= 75) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+    if (score >= 50) return "text-amber-400 bg-amber-500/10 border-amber-500/20";
     return "text-rose-400 bg-rose-500/10 border-rose-500/20";
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#020617] text-slate-200 font-sans">
+    <div className="flex-1 flex flex-col min-h-screen bg-[#020617] text-slate-200 font-sans overflow-x-hidden">
       {/* Header */}
       <header className="bg-[#0f172a]/60 backdrop-blur-md border-b border-slate-800/50 px-6 py-6 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -574,7 +653,7 @@ export function WellnessDashboard({ onViewAthlete }: WellnessDashboardProps) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 space-y-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 space-y-8">
         {showDebug && (
           <Card className="bg-slate-900/80 border-cyan-500/30 shadow-2xl overflow-hidden">
             <CardHeader className="bg-cyan-500/10 border-b border-cyan-500/20 py-3">
@@ -629,7 +708,27 @@ ANALYZE wellness_records;
 ANALYZE check_ins;`}
                   </pre>
                   
-                  <p className="text-red-400 font-bold mt-4">Opção 2: Reset Total (CUIDADO: Apaga dados de Wellness/Check-in)</p>
+                  <div className="flex gap-4 mt-4">
+                    <Button
+                      onClick={autoFixDatabase}
+                      disabled={isAutoFixing}
+                      className="bg-cyan-500 hover:bg-cyan-600 text-white font-black uppercase text-[10px] tracking-widest"
+                    >
+                      {isAutoFixing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Activity className="w-4 h-4 mr-2" />}
+                      Otimizar Banco (Auto-Fix)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={fetchWellnessData}
+                      disabled={isLoading}
+                      className="border-slate-700 text-slate-300 hover:text-white font-black uppercase text-[10px] tracking-widest"
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
+                      Recarregar Dados
+                    </Button>
+                  </div>
+                  
+                  <p className="text-red-400 font-bold mt-6">Opção 2: Reset Total (CUIDADO: Apaga dados de Wellness/Check-in)</p>
                   <pre className="text-slate-400 whitespace-pre-wrap bg-slate-900 p-2 rounded border border-slate-800 select-all">
 {`CREATE OR REPLACE FUNCTION public.exec_sql(sql text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN EXECUTE sql; END; $$;
 
@@ -681,11 +780,19 @@ CREATE TABLE wellness_records (
   muscle_soreness INTEGER,
   soreness_location TEXT,
   stress_level INTEGER,
+  mood INTEGER,
+  nutrition INTEGER,
+  pre_training_meal INTEGER,
+  training_recovery INTEGER,
+  confidence INTEGER,
+  overall_wellbeing INTEGER,
   readiness_score INTEGER,
   menstrual_cycle TEXT,
   menstrual_symptoms TEXT[],
   hydration_perception NUMERIC,
   hydration_score NUMERIC,
+  urine_color INTEGER,
+  symptoms JSONB DEFAULT '{}'::jsonb,
   comments TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -794,10 +901,10 @@ ANALYZE check_ins;`}
           </div>
         ) : !isAutoFixing && (
           <>
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-slate-900/40 border-slate-800/50 shadow-xl">
-            <CardContent className="p-6 flex items-center gap-4">
+            <CardContent className="p-4 sm:p-6 flex items-center gap-4">
               <div className="p-4 bg-cyan-500/10 rounded-2xl border border-cyan-500/20">
                 <CheckCircle2 className="w-8 h-8 text-cyan-400" />
               </div>
@@ -812,7 +919,7 @@ ANALYZE check_ins;`}
           </Card>
 
           <Card className="bg-slate-900/40 border-slate-800/50 shadow-xl">
-            <CardContent className="p-6 flex items-center gap-4">
+            <CardContent className="p-4 sm:p-6 flex items-center gap-4">
               <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
                 <Activity className="w-8 h-8 text-emerald-400" />
               </div>
@@ -831,7 +938,7 @@ ANALYZE check_ins;`}
           </Card>
 
           <Card className="bg-slate-900/40 border-rose-500/30 shadow-[0_0_30px_rgba(244,63,94,0.1)]">
-            <CardContent className="p-6 flex items-center gap-4">
+            <CardContent className="p-4 sm:p-6 flex items-center gap-4">
               <div className="p-4 bg-rose-500/20 rounded-2xl border border-rose-500/30">
                 <AlertCircle className="w-8 h-8 text-rose-400" />
               </div>
@@ -848,8 +955,8 @@ ANALYZE check_ins;`}
 
         {/* Filters and List */}
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800/50 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800/50 w-full sm:w-auto overflow-x-auto no-scrollbar">
               {[
                 { id: 'all', label: 'Todos' },
                 { id: 'completed', label: 'Respondidos' },
@@ -888,17 +995,42 @@ ANALYZE check_ins;`}
                 <thead>
                   <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                     <th className="p-4 pl-6">Atleta</th>
-                    <th className="p-4 text-center">Status</th>
+                    <th className="p-4 text-center hidden lg:table-cell">Status</th>
                     <th className="p-4 text-center">Prontidão</th>
-                    <th className="p-4 text-center">Sono (h)</th>
-                    <th className="p-4 text-center">Dor Muscular</th>
-                    <th className="p-4 text-center">Fadiga</th>
-                    <th className="p-4 text-center">Ciclo</th>
+                    <th className="p-4 text-center hidden sm:table-cell">Sono (h)</th>
+                    <th className="p-4 text-center">Dor</th>
+                    <th className="p-4 text-center hidden md:table-cell">Fadiga</th>
+                    <th className="p-4 text-center hidden xl:table-cell">Ciclo</th>
                     <th className="p-4 text-right pr-6">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
-                  {filteredAthletes.map((athlete) => (
+                  {filteredAthletes.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-20 text-center">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="p-4 bg-slate-800/50 rounded-full">
+                            <Search className="w-8 h-8 text-slate-600" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-white font-bold">Nenhum atleta encontrado</p>
+                            <p className="text-xs text-slate-500">Tente ajustar seus filtros ou buscar por outro nome.</p>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setFilter('all');
+                            }}
+                            className="mt-2 border-slate-700 text-slate-400 hover:text-white"
+                          >
+                            Limpar Filtros
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredAthletes.map((athlete) => (
                     <motion.tr 
                       key={athlete.id}
                       initial={{ opacity: 0 }}
@@ -930,14 +1062,14 @@ ANALYZE check_ins;`}
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center hidden lg:table-cell">
                         {athlete.status === 'completed' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest">
-                            <CheckCircle2 className="w-3 h-3" /> Respondido
+                            <CheckCircle2 className="w-3 h-3" /> OK
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                            <Clock className="w-3 h-3" /> Pendente
+                            <Clock className="w-3 h-3" /> Pend
                           </span>
                         )}
                       </td>
@@ -947,32 +1079,34 @@ ANALYZE check_ins;`}
                             <span className={`inline-flex items-center justify-center w-10 h-8 rounded-lg border font-black text-sm ${getReadinessColor(athlete.readiness)}`}>
                               {athlete.readiness}
                             </span>
-                            {athlete.trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
-                            {athlete.trend === 'down' && <TrendingDown className="w-4 h-4 text-rose-500" />}
-                            {athlete.trend === 'stable' && <Minus className="w-4 h-4 text-slate-500" />}
                           </div>
                         ) : (
                           <span className="text-slate-600">-</span>
                         )}
                       </td>
-                      <td className="p-4 text-center font-bold text-slate-300">
+                      <td className="p-4 text-center font-bold text-slate-300 hidden sm:table-cell">
                         {athlete.sleep ? `${athlete.sleep}h` : '-'}
                       </td>
                       <td className="p-4 text-center">
-                        {athlete.soreness ? (
-                          <span className={`text-sm font-black ${athlete.soreness > 4 ? 'text-rose-400' : 'text-slate-300'}`}>
-                            {athlete.soreness}/10
-                          </span>
-                        ) : '-'}
+                        <div className="flex flex-col items-center gap-1">
+                          {athlete.soreness ? (
+                            <span className={`text-sm font-black ${athlete.soreness > 4 ? 'text-rose-400' : 'text-slate-300'}`}>
+                              {athlete.soreness}
+                            </span>
+                          ) : '-'}
+                          {athlete.sorenessLocation && athlete.sorenessLocation !== 'Nenhuma' && (
+                            <span className="text-[8px] font-black text-rose-500 uppercase tracking-tighter bg-rose-500/10 px-1 rounded">Mapa</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center hidden md:table-cell">
                         {athlete.fatigue ? (
                           <span className={`text-sm font-black ${athlete.fatigue > 4 ? 'text-rose-400' : 'text-slate-300'}`}>
-                            {athlete.fatigue}/10
+                            {athlete.fatigue}
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center hidden xl:table-cell">
                         {athlete.gender === 'F' ? (
                           <div className="flex flex-col items-center gap-1">
                             {athlete.menstrualCycle ? (
@@ -1143,107 +1277,141 @@ ANALYZE check_ins;`}
 
                 {/* Soreness */}
                 <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50 sm:col-span-2">
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-6">
                     <div className="p-2 bg-rose-500/10 rounded-lg">
                       <Activity className="w-5 h-5 text-rose-400" />
                     </div>
                     <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Dor Muscular e Mapa de Dor</p>
                   </div>
-                      <div className="flex flex-col md:flex-row gap-6 items-center justify-center">
-                        <div className="w-full max-w-[200px] shrink-0">
-                          <PainMap 
-                            value={(() => {
-                              if (!selectedAnswers.sorenessLocation || selectedAnswers.sorenessLocation === 'Nenhuma') return {};
-                              try {
-                                const parsed = JSON.parse(selectedAnswers.sorenessLocation);
-                                const map: Record<string, { level: number; type: string }> = {};
-                                
-                                if (Array.isArray(parsed)) {
-                                  parsed.forEach(item => {
-                                    map[item.region] = { 
-                                      level: item.intensity || item.level || 5, 
-                                      type: item.type || 'muscle' 
-                                    };
-                                  });
-                                  return map;
-                                } else if (typeof parsed === 'object' && parsed !== null) {
-                                  Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
-                                    if (typeof data === 'object' && data !== null) {
-                                      map[loc] = { 
-                                        level: data.level || 5, 
-                                        type: data.type || 'muscle' 
-                                      };
-                                    } else {
-                                      map[loc] = { 
-                                        level: Number(data) || 5, 
-                                        type: 'muscle' 
-                                      };
-                                    }
-                                  });
-                                  return map;
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <div className="lg:col-span-7 w-full overflow-hidden">
+                      <PainMap 
+                        value={(() => {
+                          if (!selectedAnswers.sorenessLocation || selectedAnswers.sorenessLocation === 'Nenhuma') return {};
+                          try {
+                            const parsed = JSON.parse(selectedAnswers.sorenessLocation);
+                            const map: Record<string, { level: number; type: string }> = {};
+                            
+                            if (Array.isArray(parsed)) {
+                              parsed.forEach(item => {
+                                map[item.region] = { 
+                                  level: item.intensity || item.level || 5, 
+                                  type: item.type || 'muscle' 
+                                };
+                              });
+                              return map;
+                            } else if (typeof parsed === 'object' && parsed !== null) {
+                              Object.entries(parsed).forEach(([loc, data]: [string, any]) => {
+                                if (typeof data === 'object' && data !== null) {
+                                  map[loc] = { 
+                                    level: data.level || 5, 
+                                    type: data.type || 'muscle' 
+                                  };
+                                } else {
+                                  map[loc] = { 
+                                    level: Number(data) || 5, 
+                                    type: 'muscle' 
+                                  };
                                 }
-                              } catch (e) {
-                                const parts = selectedAnswers.sorenessLocation.split(',').map((s: string) => s.trim());
-                                const map: Record<string, { level: number; type: string }> = {};
-                                parts.forEach((p: string) => {
-                                  if (p) map[p] = { level: selectedAnswers.soreness || 5, type: 'muscle' };
-                                });
-                                return map;
-                              }
-                              return {};
-                            })()}
-                            readOnly={true}
+                              });
+                              return map;
+                            }
+                          } catch (e) {
+                            const parts = selectedAnswers.sorenessLocation.split(',').map((s: string) => s.trim());
+                            const map: Record<string, { level: number; type: string }> = {};
+                            parts.forEach((p: string) => {
+                              if (p) map[p] = { level: selectedAnswers.soreness || 5, type: 'muscle' };
+                            });
+                            return map;
+                          }
+                          return {};
+                        })()}
+                        readOnly={true}
+                      />
+                    </div>
+                    
+                    <div className="lg:col-span-5 space-y-8 w-full">
+                      <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-4">
+                        <div className="flex justify-between items-end">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
+                          <p className={`text-2xl font-black ${selectedAnswers.soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {selectedAnswers.soreness}/10
+                          </p>
+                        </div>
+                        <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              (selectedAnswers.soreness || 0) <= 3 ? 'bg-emerald-500' : 
+                              (selectedAnswers.soreness || 0) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${((selectedAnswers.soreness || 0) / 10) * 100}%` }}
                           />
                         </div>
-                    <div className="flex-1 space-y-4 w-full">
-                      <div className="flex justify-between items-end">
-                        <p className="text-sm text-slate-500">Intensidade Geral</p>
-                        <p className={`text-xl font-black ${selectedAnswers.soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {selectedAnswers.soreness}/10
-                        </p>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <p className="text-sm text-slate-500">Locais Detalhados</p>
-                        <div className="flex flex-wrap gap-2">
+
+                      <div className="space-y-4">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
+                        <div className="grid grid-cols-1 gap-2">
                           {selectedAnswers.sorenessLocation && selectedAnswers.sorenessLocation !== 'Nenhuma' ? (
                             (() => {
                               try {
                                 const parsed = JSON.parse(selectedAnswers.sorenessLocation);
                                 if (Array.isArray(parsed)) {
                                   return parsed.map((item: any) => (
-                                    <span 
+                                    <div 
                                       key={item.region}
-                                      className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
+                                      className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between group hover:bg-rose-500/10 transition-all"
                                     >
-                                      {getPainLocationLabel(item.region)}
-                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {item.intensity || item.level || 5}</span>
-                                    </span>
+                                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                        {getPainLocationLabel(item.region)}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-1 rounded uppercase">
+                                          Nível {item.intensity || item.level || 5}
+                                        </span>
+                                      </div>
+                                    </div>
                                   ));
                                 } else if (typeof parsed === 'object' && parsed !== null) {
                                   return Object.entries(parsed).map(([loc, data]: [string, any]) => (
-                                    <span 
+                                    <div 
                                       key={loc}
-                                      className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
+                                      className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between group hover:bg-rose-500/10 transition-all"
                                     >
-                                      {getPainLocationLabel(loc)}
-                                      <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {typeof data === 'object' ? data.level : data}</span>
-                                    </span>
+                                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                        {getPainLocationLabel(loc)}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-1 rounded uppercase">
+                                          Nível {typeof data === 'object' ? data.level : data}
+                                        </span>
+                                      </div>
+                                    </div>
                                   ));
                                 }
                               } catch (e) {
                                 return selectedAnswers.sorenessLocation.split(',').map((loc: string) => (
-                                  <span 
+                                  <div 
                                     key={loc}
-                                    className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
+                                    className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between group hover:bg-rose-500/10 transition-all"
                                   >
-                                    {getPainLocationLabel(loc.trim())}
-                                    <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {selectedAnswers.soreness || 5}</span>
-                                  </span>
+                                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                      {getPainLocationLabel(loc.trim())}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-1 rounded uppercase">
+                                        Nível {selectedAnswers.soreness || 5}
+                                      </span>
+                                    </div>
+                                  </div>
                                 ));
                               }
                             })()
                           ) : (
-                            <span className="text-sm font-bold text-slate-500">Nenhum local selecionado</span>
+                            <div className="p-4 bg-slate-950/50 border border-slate-800 border-dashed rounded-xl text-center">
+                              <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Nenhum local selecionado</span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1303,6 +1471,82 @@ ANALYZE check_ins;`}
                     <p className={`text-2xl font-black ${selectedAnswers.stress > 5 ? 'text-purple-400' : 'text-emerald-400'}`}>
                       {selectedAnswers.stress}
                     </p>
+                  </div>
+                </div>
+
+                {/* Mood */}
+                <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-pink-500/10 rounded-lg">
+                      <Smile className="w-5 h-5 text-pink-400" />
+                    </div>
+                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Humor</p>
+                  </div>
+                  <div className="flex justify-between items-end h-[44px]">
+                    <p className="text-sm text-slate-500">Nível (1-5)</p>
+                    <p className={`text-2xl font-black ${selectedAnswers.mood < 3 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {selectedAnswers.mood || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Hydration */}
+                <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg">
+                      <Droplets className="w-5 h-5 text-cyan-400" />
+                    </div>
+                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Hidratação</p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-end">
+                      <p className="text-sm text-slate-500">Percepção (1-5)</p>
+                      <p className="text-lg font-black text-white">{selectedAnswers.hydration_perception || '-'}</p>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <p className="text-sm text-slate-500">Cor Urina (1-5)</p>
+                      <p className="text-sm font-bold text-cyan-400">{selectedAnswers.urine_color || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nutrition */}
+                <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-emerald-500/10 rounded-lg">
+                      <Apple className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Nutrição</p>
+                  </div>
+                  <div className="flex justify-between items-end h-[44px]">
+                    <p className="text-sm text-slate-500">Qualidade (1-5)</p>
+                    <p className={`text-2xl font-black ${selectedAnswers.nutrition < 3 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {selectedAnswers.nutrition || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Confidence & Recovery */}
+                <div className="p-5 bg-slate-900/40 rounded-2xl border border-slate-800/50 sm:col-span-2">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-blue-500/10 rounded-lg">
+                          <Target className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Confiança</p>
+                      </div>
+                      <p className="text-2xl font-black text-white">{selectedAnswers.confidence || '-'}/5</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-orange-500/10 rounded-lg">
+                          <RefreshCcw className="w-5 h-5 text-orange-400" />
+                        </div>
+                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Recuperação</p>
+                      </div>
+                      <p className="text-2xl font-black text-white">{selectedAnswers.trainingRecovery || '-'}/5</p>
+                    </div>
                   </div>
                 </div>
 

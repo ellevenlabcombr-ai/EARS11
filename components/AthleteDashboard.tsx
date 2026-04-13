@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import {
   History,
   Plus,
   ChevronLeft,
+  ChevronRight,
   Target,
   Dumbbell,
   Heart,
@@ -38,7 +39,9 @@ import {
   Zap,
   MessageSquare,
   LogOut,
-  User
+  User,
+  X,
+  Brain
 } from "lucide-react";
 import Image from "next/image";
 import { PainMap } from "@/components/PainMap";
@@ -101,7 +104,7 @@ const getPainLocationLabel = (id: string): string => {
     foot_l_b: "Calcanhar Esquerdo",
     foot_r_b: "Calcanhar Direito",
   };
-  return mapping[id] || id.replace(/_/g, " ");
+  return mapping[id.trim()] || id.trim().replace(/_/g, " ");
 };
 
 const getPainIntensityColor = (level: number): string => {
@@ -219,6 +222,10 @@ const getOptionsForMetric = (metricId: string, lang: Language) => {
       return confidenceOptions;
     case "leg_heaviness":
       return legHeavinessOptions;
+    case "mood":
+    case "training_recovery":
+    case "overall_wellbeing":
+      return defaultOptions;
     case "menstrual_cycle":
       return menstrualCycleOptions;
     default:
@@ -394,6 +401,7 @@ export function AthleteDashboard({
   const [xp, setXp] = useState(0);
   const [coins, setCoins] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
 
   const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
   const [setupCycleLength, setSetupCycleLength] = useState(28);
@@ -852,6 +860,12 @@ export function AthleteDashboard({
 
       if (checkInError) throw checkInError;
 
+      // Calculate max pain from map
+      const painValues = Object.values(painMap).map(p => p.level);
+      const maxPainFromMap = painValues.length > 0 ? Math.max(...painValues) : 0;
+      const reportedSoreness = answers["leg_heaviness"] || 0;
+      const finalSoreness = Math.max(reportedSoreness, maxPainFromMap);
+
       // Also save to the new wellness_records table
       const wellnessData: Partial<WellnessRecord> = {
         athlete_id: athleteId,
@@ -859,7 +873,7 @@ export function AthleteDashboard({
         sleep_hours: answers["sleep_hours"] || 8,
         sleep_quality: answers["sleep"] || null,
         fatigue_level: answers["energy"] ? (6 - answers["energy"]) : null, // Invert energy to get fatigue
-        muscle_soreness: answers["leg_heaviness"] || null, // Corrected from mood
+        muscle_soreness: finalSoreness > 0 ? finalSoreness : null,
         soreness_location: Object.keys(painMap).length > 0 ? JSON.stringify(
           Object.entries(painMap).map(([region, data]) => ({
             region,
@@ -868,6 +882,12 @@ export function AthleteDashboard({
           }))
         ) : null,
         stress_level: answers["stress"] || null,
+        mood: answers["mood"] || null,
+        nutrition: answers["nutrition"] || null,
+        pre_training_meal: answers["pre_training_meal"] || null,
+        training_recovery: answers["training_recovery"] || null,
+        confidence: answers["confidence"] || null,
+        overall_wellbeing: answers["overall_wellbeing"] || null,
         readiness_score: readiness,
         comments: notes.trim() || null,
         hydration_perception: answers["hydration"] || null, // Corrected to numeric
@@ -1720,6 +1740,14 @@ export function AthleteDashboard({
                                 </span>
                               </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedRecord(record)}
+                              className="text-slate-500 hover:text-white hover:bg-slate-800 rounded-full"
+                            >
+                              <ChevronRight className="w-5 h-5" />
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -1827,25 +1855,25 @@ export function AthleteDashboard({
 
             {Object.keys(painMap).length > 0 && (
               <div className="mt-6 pt-6 border-t border-slate-800/50">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">
                   {t[lang].painMapping}
                 </h3>
-                <div className="flex flex-col sm:flex-row gap-8 items-center justify-center">
-                  <div className="w-full max-w-[220px] shrink-0">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                  <div className="lg:col-span-7 w-full overflow-hidden">
                     <PainMap 
                       value={painMap} 
                       readOnly={true}
                     />
                   </div>
-                  <div className="flex-1 space-y-6 w-full">
-                    <div className="space-y-2">
+                  <div className="lg:col-span-5 space-y-8 w-full">
+                    <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-4">
                       <div className="flex justify-between items-end">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
-                        <p className={`text-xl font-black ${answers.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <p className={`text-2xl font-black ${answers.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
                           {answers.muscle_soreness}/10
                         </p>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${
                             answers.muscle_soreness <= 3 ? 'bg-emerald-500' : 
@@ -1855,17 +1883,23 @@ export function AthleteDashboard({
                         />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-3">
+                    <div className="space-y-4">
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-1 gap-2">
                         {Object.entries(painMap).map(([part, data]) => (
-                          <span 
+                          <div 
                             key={part}
-                            className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"
+                            className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between group hover:bg-rose-500/10 transition-all"
                           >
-                            {getPainLocationLabel(part)}
-                            <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
-                          </span>
+                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                              {getPainLocationLabel(part)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-1 rounded uppercase">
+                                Nível {data.level}
+                              </span>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -2385,7 +2419,53 @@ export function AthleteDashboard({
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <PainMap value={painMap} onChange={setPainMap} lang={lang} />
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <div className="lg:col-span-7 w-full overflow-hidden">
+                  <PainMap value={painMap} onChange={setPainMap} lang={lang} />
+                </div>
+                <div className="lg:col-span-5 space-y-6">
+                  <div className="bg-slate-950/50 p-5 rounded-2xl border border-cyan-500/10 space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      <p className="text-[10px] font-black text-cyan-500/70 uppercase tracking-widest">Status do Scanner</p>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Áreas Detectadas</p>
+                      <p className="text-2xl font-black text-white">{Object.keys(painMap).length}</p>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Intensidade Máx.</p>
+                      <p className={`text-2xl font-black ${Math.max(0, ...Object.values(painMap).map(p => p.level)) > 6 ? 'text-rose-400' : 'text-cyan-400'}`}>
+                        {Math.max(0, ...Object.values(painMap).map(p => p.level))}/10
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Legenda de Cores</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 border border-slate-800/50">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">0-3: Leve / Normal</span>
+                      </div>
+                      <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 border border-slate-800/50">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">4-6: Moderado / Atenção</span>
+                      </div>
+                      <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 border border-slate-800/50">
+                        <div className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">7-10: Intenso / Crítico</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
+                    <p className="text-[10px] text-cyan-400/70 font-medium leading-relaxed italic">
+                      * Toque nas áreas do corpo para registrar o nível e o tipo de dor específica.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -2545,6 +2625,174 @@ export function AthleteDashboard({
           {isSubmitting ? t[lang].syncing : t[lang].syncData}
         </Button>
       </motion.div>
+      <AnimatePresence>
+        {selectedRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#0A1120] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              <div className="flex justify-between items-center p-6 border-b border-slate-800">
+                <div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">
+                    {parseDateString(selectedRecord.record_date || selectedRecord.created_at).toLocaleDateString(
+                      lang === "pt" ? "pt-BR" : "en-US",
+                      { weekday: 'long', day: '2-digit', month: 'long' }
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest mt-1">
+                    Check-in realizado às {parseDateString(selectedRecord.record_date || selectedRecord.created_at).toLocaleTimeString(lang === "pt" ? "pt-BR" : "en-US", { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedRecord(null)}
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-full"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                {/* Readiness Score */}
+                <div className="flex flex-col items-center justify-center py-4 bg-slate-900/40 rounded-3xl border border-slate-800/50">
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="58"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="transparent"
+                        className="text-slate-800"
+                      />
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="58"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="transparent"
+                        strokeDasharray={364.4}
+                        strokeDashoffset={364.4 - (364.4 * selectedRecord.readiness_score) / 100}
+                        className={`${
+                          selectedRecord.readiness_score >= 75 ? "text-emerald-500" : 
+                          selectedRecord.readiness_score >= 50 ? "text-amber-500" : "text-red-500"
+                        } transition-all duration-1000 ease-out`}
+                      />
+                    </svg>
+                    <span className="absolute text-3xl font-black text-white">{selectedRecord.readiness_score}%</span>
+                  </div>
+                  <p className="mt-4 text-xs font-black text-slate-500 uppercase tracking-widest">Nível de Prontidão</p>
+                </div>
+
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {metrics.map((m) => {
+                    const val = selectedRecord[m.id] || selectedRecord.wellness_records?.[0]?.[m.id];
+                    const opt = getOptionsForMetric(m.id, lang).find(o => o.value === val);
+                    if (!opt) return null;
+                    return (
+                      <div key={m.id} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50 flex flex-col items-center text-center">
+                        <m.icon className={`w-5 h-5 ${theme.text} mb-2`} />
+                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">{m.label}</span>
+                        <span className="text-base">{opt.emoji} <span className="text-sm text-white font-bold ml-1">{opt.label}</span></span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pain Map */}
+                {(selectedRecord.soreness_location || selectedRecord.wellness_records?.[0]?.soreness_location) && (
+                  <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                    <div className="flex items-center gap-3">
+                      <ActivitySquare className="w-5 h-5 text-rose-400" />
+                      <h4 className="text-sm font-black text-white uppercase tracking-widest">Mapa de Dor</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                      <div className="w-full overflow-hidden">
+                        <PainMap 
+                          value={(() => {
+                            const loc = selectedRecord.soreness_location || selectedRecord.wellness_records?.[0]?.soreness_location;
+                            if (!loc || loc === 'Nenhuma') return {};
+                            try {
+                              const parsed = JSON.parse(loc);
+                              const map: Record<string, { level: number; type: string }> = {};
+                              if (Array.isArray(parsed)) {
+                                parsed.forEach(item => {
+                                  map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
+                                });
+                                return map;
+                              } else if (typeof parsed === 'object') {
+                                Object.entries(parsed).forEach(([l, d]: [string, any]) => {
+                                  map[l] = { level: typeof d === 'object' ? d.level : d, type: d.type || 'muscle' };
+                                });
+                                return map;
+                              }
+                            } catch (e) {
+                              const parts = loc.split(',');
+                              const map: Record<string, { level: number; type: string }> = {};
+                              parts.forEach((p: string) => {
+                                if (p.trim()) map[p.trim()] = { level: selectedRecord.muscle_soreness || 5, type: 'muscle' };
+                              });
+                              return map;
+                            }
+                            return {};
+                          })()}
+                          readOnly={true}
+                        />
+                      </div>
+                      <div className="space-y-6">
+                        <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-3">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
+                          <p className={`text-2xl font-black ${selectedRecord.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {selectedRecord.muscle_soreness}/10
+                          </p>
+                        </div>
+                        <div className="space-y-3">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais</p>
+                          <div className="flex flex-wrap gap-2">
+                            {(() => {
+                              const loc = selectedRecord.soreness_location || selectedRecord.wellness_records?.[0]?.soreness_location;
+                              if (!loc || loc === 'Nenhuma') return null;
+                              try {
+                                const parsed = JSON.parse(loc);
+                                if (Array.isArray(parsed)) {
+                                  return parsed.map(item => (
+                                    <span key={item.region} className="px-2 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded text-[10px] font-bold uppercase">
+                                      {getPainLocationLabel(item.region)} (N{item.intensity || item.level || 5})
+                                    </span>
+                                  ));
+                                }
+                              } catch(e) {}
+                              return null;
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {selectedRecord.notes && (
+                  <div className="space-y-3 pt-4 border-t border-slate-800/50">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Observações</p>
+                    <div className="p-4 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                      <p className="text-sm text-slate-300 italic">&quot;{selectedRecord.notes}&quot;</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
