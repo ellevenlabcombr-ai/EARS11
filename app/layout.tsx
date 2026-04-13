@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -49,6 +50,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         <LanguageProvider>
           {children}
           <ScrollToTop />
+          <InstallPrompt />
         </LanguageProvider>
       </body>
     </html>
