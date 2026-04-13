@@ -1217,36 +1217,6 @@ export function AthleteDashboard({
           </div>
         </div>
 
-        {/* Pending Wellness Alert */}
-        {!hasCheckedInToday && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4 max-w-md mx-auto shadow-lg mb-6"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/20 rounded-full shrink-0">
-                <Clock className="w-5 h-5 text-amber-400" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-amber-400 mb-0.5">
-                  {lang === "pt" ? "Wellness Pendente" : "Pending Wellness"}
-                </h4>
-                <p className="text-[10px] text-amber-200/70 uppercase font-bold tracking-wider">
-                  {lang === "pt" ? "Preencha seu questionário diário" : "Fill out your daily questionnaire"}
-                </p>
-              </div>
-            </div>
-            <Button 
-              size="sm"
-              onClick={() => setView("questionnaire")}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold uppercase text-[10px] tracking-widest px-4"
-            >
-              {lang === "pt" ? "Preencher" : "Fill Out"}
-            </Button>
-          </motion.div>
-        )}
-
         <div className="text-center space-y-3 sm:space-y-4">
           <div className="flex flex-col items-center justify-center gap-3 sm:gap-4">
             <div className={`relative w-20 h-20 sm:w-28 sm:h-28 rounded-full border-4 ${theme.border} shadow-2xl transition-all duration-500 hover:scale-105`}>
@@ -1476,14 +1446,31 @@ export function AthleteDashboard({
           
           <Card className="bg-slate-900/40 border-slate-800/50 overflow-hidden shadow-xl">
             <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
+              <div className="flex flex-col sm:flex-row gap-8 items-center justify-center">
                 <div className="w-full max-w-[220px] shrink-0">
                   <PainMap 
                     value={finalPainMap} 
                     readOnly={true}
                   />
                 </div>
-                <div className="flex-1 space-y-4 w-full">
+                <div className="flex-1 space-y-6 w-full">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-end">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
+                      <p className={`text-xl font-black ${latestCheckIn?.muscle_soreness && latestCheckIn.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {latestCheckIn?.muscle_soreness || 0}/10
+                      </p>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          (latestCheckIn?.muscle_soreness || 0) <= 3 ? 'bg-emerald-500' : 
+                          (latestCheckIn?.muscle_soreness || 0) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${((latestCheckIn?.muscle_soreness || 0) / 10) * 100}%` }}
+                      />
+                    </div>
+                  </div>
                   <div className="flex flex-col gap-3">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
                     <div className="flex flex-wrap gap-2">
@@ -1843,45 +1830,46 @@ export function AthleteDashboard({
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">
                   {t[lang].painMapping}
                 </h3>
-                <div className="space-y-3">
-                  {Object.entries(painMap).map(([part, data]) => {
-                    const typeLabel =
-                      t[lang].painTypes[
-                        data.type as keyof typeof t.pt.painTypes
-                      ] || data.type;
-                    const intensityColor = getPainIntensityColor(data.level);
-                    const locationLabel = getPainLocationLabel(part);
-                    
-                    return (
-                      <div
-                        key={part}
-                        className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-xl group hover:border-slate-700 transition-colors"
-                      >
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-white uppercase tracking-wider">
-                            {locationLabel}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-0.5">
-                            {typeLabel}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-24 bg-slate-800 rounded-full overflow-hidden hidden sm:block">
-                            <div 
-                              className={`h-full rounded-full ${
-                                data.level <= 3 ? 'bg-emerald-500' : 
-                                data.level <= 6 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${(data.level / 10) * 100}%` }}
-                            />
-                          </div>
-                          <span className={`text-sm font-black tracking-tighter ${intensityColor}`}>
-                            {data.level}/10
-                          </span>
-                        </div>
+                <div className="flex flex-col sm:flex-row gap-8 items-center justify-center">
+                  <div className="w-full max-w-[220px] shrink-0">
+                    <PainMap 
+                      value={painMap} 
+                      readOnly={true}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-6 w-full">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
+                        <p className={`text-xl font-black ${answers.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {answers.muscle_soreness}/10
+                        </p>
                       </div>
-                    );
-                  })}
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            answers.muscle_soreness <= 3 ? 'bg-emerald-500' : 
+                            answers.muscle_soreness <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${(answers.muscle_soreness / 10) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(painMap).map(([part, data]) => (
+                          <span 
+                            key={part}
+                            className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"
+                          >
+                            {getPainLocationLabel(part)}
+                            <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
