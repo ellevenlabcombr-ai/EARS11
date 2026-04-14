@@ -1441,7 +1441,10 @@ ANALYZE check_ins;`}
                           dizziness: "Tontura",
                           nausea: "Náusea",
                           fatigue_extreme: "Fadiga extrema",
-                          general_malaise: "Mal-estar geral"
+                          general_malaise: "Mal-estar geral",
+                          skin_lesion: "Lesão de Pele / Bolhas",
+                          ingrown_nail: "Unha Encravada",
+                          bruise: "Hematoma / Pancada"
                         };
                         const levelLabels = ["Nenhum", "Leve", "Moderado", "Severo"];
                         return (
