@@ -334,17 +334,18 @@ export function PainMap({
 }) {
   const [selectedPart, setSelectedPart] = useState<BodyPart | null>(null);
   const [tempLevel, setTempLevel] = useState<number | null>(null);
-  const [tempType, setTempType] = useState<string>("muscle");
+  const [tempType, setTempType] = useState<string[]>(["muscle"]);
 
   const handlePartClick = (part: BodyPart) => {
     if (readOnly) return;
     setSelectedPart(part);
     if (value[part.id]) {
       setTempLevel(value[part.id].level);
-      setTempType(value[part.id].type || "muscle");
+      const existingType = value[part.id].type;
+      setTempType(existingType ? existingType.split(', ') : ["muscle"]);
     } else {
       setTempLevel(null);
-      setTempType("muscle");
+      setTempType(["muscle"]);
     }
   };
 
@@ -352,10 +353,16 @@ export function PainMap({
     if (selectedPart && onChange && tempLevel !== null) {
       onChange({
         ...value,
-        [selectedPart.id]: { level: tempLevel, type: tempType },
+        [selectedPart.id]: { level: tempLevel, type: tempType.join(', ') },
       });
       setSelectedPart(null);
     }
+  };
+
+  const toggleType = (id: string) => {
+    setTempType(prev => 
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+    );
   };
 
   const handleRemove = () => {
@@ -739,9 +746,9 @@ export function PainMap({
                     ].map((type) => (
                       <button
                         key={type.id}
-                        onClick={() => setTempType(type.id)}
+                        onClick={() => toggleType(type.id)}
                         className={`p-2 rounded-lg text-sm font-medium transition-all border ${
-                          tempType === type.id
+                          tempType.includes(type.id)
                             ? "bg-cyan-500/20 text-cyan-400 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                             : "bg-slate-800 text-slate-400 hover:bg-slate-700 border-slate-700"
                         }`}

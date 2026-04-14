@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
+import Cropper from 'react-easy-crop';
+import getCroppedImg from '@/lib/cropImage';
 import { supabase } from "@/lib/supabase";
 import {
   UserPlus,
@@ -127,6 +129,12 @@ export function AthleteRegistration({ onBack, onSave, initialData, onDirtyChange
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
   const [cep, setCep] = useState(initialData?.cep || '');
   const [address, setAddress] = useState(initialData?.address || { logradouro: '', bairro: '', localidade: '', uf: '' });
@@ -327,13 +335,42 @@ export function AthleteRegistration({ onBack, onSave, initialData, onDirtyChange
         alert("A foto deve ter no máximo 5MB");
         return;
       }
-      setPhotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPhoto(reader.result as string);
+        setImageToCrop(reader.result as string);
+        setCropModalOpen(true);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const handleCropConfirm = async () => {
+    try {
+      if (!imageToCrop || !croppedAreaPixels) return;
+      const croppedImageBase64 = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      if (croppedImageBase64) {
+        setPhoto(croppedImageBase64);
+        
+        // Convert base64 to file for upload
+        const res = await fetch(croppedImageBase64);
+        const blob = await res.blob();
+        const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+        setPhotoFile(file);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setCropModalOpen(false);
+    setImageToCrop(null);
+  };
+
+  const handleCropCancel = () => {
+    setCropModalOpen(false);
+    setImageToCrop(null);
   };
 
   const compressImage = (base64: string, maxWidth = 400, maxHeight = 400): Promise<string> => {
@@ -1200,6 +1237,59 @@ export function AthleteRegistration({ onBack, onSave, initialData, onDirtyChange
         onConfirm={onDelete}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      <AnimatePresence>
+        {cropModalOpen && imageToCrop && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#0A1120] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Ajustar Foto</h3>
+                <Button variant="ghost" size="icon" onClick={handleCropCancel} className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-full">
+                  <Trash2 className="w-5 h-5" />
+                </Button>
+              </div>
+              <div className="relative w-full h-[400px] bg-black">
+                <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                />
+              </div>
+              <div className="p-6 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-1/2 accent-cyan-500"
+                />
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={handleCropCancel} className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 uppercase tracking-widest text-[10px] font-bold">
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleCropConfirm} className="bg-cyan-500 hover:bg-cyan-400 text-[#050B14] uppercase tracking-widest text-[10px] font-black">
+                    Confirmar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -774,22 +774,46 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
           const chronologicalData = [...wellnessRes.data].reverse();
           
           console.log("LATEST WELLNESS RAW:", chronologicalData[chronologicalData.length - 1]);
-          const formattedWellness = chronologicalData.map(w => ({
-            date: parseDateString(w.record_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-            readiness: w.readiness_score,
-            sleep: w.sleep_hours, // Corrected from sleep_quality
-            sleep_quality: w.sleep_quality,
-            stress: w.stress_level,
-            fatigue: w.fatigue_level,
-            soreness: w.muscle_soreness,
-            load: 0, 
-            pain: w.muscle_soreness,
-            dor: w.muscle_soreness,
-            menstrual_cycle: w.menstrual_cycle,
-            hydration: w.hydration_perception,
-            urine_color: w.urine_color,
-            symptoms: w.menstrual_symptoms || []
-          }));
+          const SYMPTOM_LABELS: Record<string, string> = {
+            headache: "Dor de cabeça",
+            dizziness: "Tontura",
+            nausea: "Náusea",
+            fatigue_extreme: "Fadiga Extrema",
+            general_malaise: "Mal-estar Geral",
+            fever: "Febre",
+            shortness_of_breath: "Falta de Ar",
+            chest_pain: "Dor no Peito",
+            palpitations: "Palpitações",
+            skin_lesion: "Lesão de Pele",
+            ingrown_nail: "Unha Encravada",
+            bruise: "Hematoma/Bolha"
+          };
+
+          const formattedWellness = chronologicalData.map(w => {
+            const clinicalSymptoms = w.symptoms ? Object.entries(w.symptoms)
+              .filter(([_, level]) => (level as number) > 0)
+              .map(([key, _]) => SYMPTOM_LABELS[key] || key) : [];
+            
+            const allSymptoms = [...(w.menstrual_symptoms || []), ...clinicalSymptoms];
+
+            return {
+              date: parseDateString(w.record_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+              readiness: w.readiness_score,
+              sleep: w.sleep_hours, // Corrected from sleep_quality
+              sleep_quality: w.sleep_quality,
+              stress: w.stress_level,
+              fatigue: w.fatigue_level,
+              soreness: w.muscle_soreness,
+              soreness_location: w.soreness_location,
+              load: 0, 
+              pain: w.muscle_soreness,
+              dor: w.muscle_soreness,
+              menstrual_cycle: w.menstrual_cycle,
+              hydration: w.hydration_perception,
+              urine_color: w.urine_color,
+              symptoms: allSymptoms
+            };
+          });
           console.log("LATEST WELLNESS MAPPED:", formattedWellness[formattedWellness.length - 1]);
           setWellnessHistory(formattedWellness);
 
@@ -1817,7 +1841,11 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">Mapa de Dor Relatada</p>
                   <div className="w-full">
                     <PainMap 
-                      value={{}} 
+                      value={wellnessHistory.length > 0 && wellnessHistory[wellnessHistory.length - 1].soreness_location && wellnessHistory[wellnessHistory.length - 1].soreness_location !== 'Nenhuma' ? 
+                        (typeof wellnessHistory[wellnessHistory.length - 1].soreness_location === 'string' ? 
+                          { [wellnessHistory[wellnessHistory.length - 1].soreness_location]: ['Dor Muscular'] } : 
+                          wellnessHistory[wellnessHistory.length - 1].soreness_location
+                        ) : {}} 
                       readOnly={true} 
                     />
                   </div>
