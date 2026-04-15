@@ -68,6 +68,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PainMap } from "./PainMap";
+import { ClinicalEvolutionPanel } from "./ClinicalEvolutionPanel";
 import { SleepAssessment } from "./SleepAssessment";
 import { OrthopedicAssessment } from "./OrthopedicAssessment";
 import BiomechanicalAssessment from "./BiomechanicalAssessment";
@@ -551,6 +552,43 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
   const [showQrModal, setShowQrModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
+  const [selectedClinicalRegion, setSelectedClinicalRegion] = useState<{id: string, label: string} | null>(null);
+
+  const generateRegionEvolution = (regionId: string) => {
+    const days = 7;
+    const data = [];
+    const today = new Date();
+    
+    // Seed random based on regionId to have consistent "random" data for a region
+    let seed = regionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const random = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      
+      // Generate some realistic-ish trends
+      const basePain = 5 + (random() * 2 - 1);
+      const pain = Math.max(0, Math.min(10, Math.round(basePain - (days - 1 - i) * 0.5)));
+      
+      const baseStrength = 70 + (random() * 10 - 5);
+      const strength = Math.max(0, Math.min(100, Math.round(baseStrength + (days - 1 - i) * 2)));
+      
+      const baseRom = 80 + (random() * 10 - 5);
+      const rom = Math.max(0, Math.min(100, Math.round(baseRom + (days - 1 - i) * 1.5)));
+
+      data.push({
+        date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        pain,
+        strength,
+        rom
+      });
+    }
+    return data;
+  };
 
   const handleCopyCode = () => {
     if (athlete.athlete_code) {
@@ -1843,41 +1881,86 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                     <PainMap 
                       value={wellnessHistory.length > 0 && wellnessHistory[wellnessHistory.length - 1].soreness_location && wellnessHistory[wellnessHistory.length - 1].soreness_location !== 'Nenhuma' ? 
                         (typeof wellnessHistory[wellnessHistory.length - 1].soreness_location === 'string' ? 
-                          { [wellnessHistory[wellnessHistory.length - 1].soreness_location]: ['Dor Muscular'] } : 
+                          { [wellnessHistory[wellnessHistory.length - 1].soreness_location]: { level: wellnessHistory[wellnessHistory.length - 1].pain || 5, type: 'muscle' } } : 
                           wellnessHistory[wellnessHistory.length - 1].soreness_location
                         ) : {}} 
                       readOnly={true} 
+                      onPartClick={(part) => setSelectedClinicalRegion({ id: part.id, label: part.label })}
+                      selectedPartId={selectedClinicalRegion?.id}
                     />
                   </div>
+                  <p className="mt-4 text-[8px] font-bold text-slate-600 uppercase tracking-widest animate-pulse">
+                    Clique em uma região para ver a evolução
+                  </p>
                 </div>
                 
                 <div className="space-y-6">
-                  <div className="space-y-4">
-                    {wellnessHistory.length > 0 && (wellnessHistory[wellnessHistory.length - 1].symptoms?.length > 0 || wellnessHistory[wellnessHistory.length - 1].pain > 0) ? (
-                      <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="text-xs font-black text-white uppercase tracking-tight">Sintomas Detectados</span>
-                          <span className="text-[10px] text-slate-500 font-bold">{wellnessHistory[wellnessHistory.length - 1].date}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {wellnessHistory[wellnessHistory.length - 1].pain > 0 && (
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${wellnessHistory[wellnessHistory.length - 1].pain >= 7 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : wellnessHistory[wellnessHistory.length - 1].pain >= 4 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                              Dor: {wellnessHistory[wellnessHistory.length - 1].pain}/10
-                            </span>
-                          )}
-                          {wellnessHistory[wellnessHistory.length - 1].symptoms?.map((symptom: string) => (
-                            <span key={symptom} className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700">
-                              {symptom}
-                            </span>
-                          ))}
-                        </div>
+                  <AnimatePresence mode="wait">
+                    {selectedClinicalRegion ? (
+                      <div className="relative">
+                        <button 
+                          onClick={() => setSelectedClinicalRegion(null)}
+                          className="absolute -top-2 -right-2 p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full border border-slate-700 shadow-xl z-10 transition-all active:scale-95"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <ClinicalEvolutionPanel 
+                          key={selectedClinicalRegion.id}
+                          regionName={selectedClinicalRegion.label}
+                          data={generateRegionEvolution(selectedClinicalRegion.id)}
+                        />
                       </div>
                     ) : (
-                      <div className="p-8 bg-slate-950/30 border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-center">
-                        <Activity className="w-8 h-8 text-slate-700 mb-3" />
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Nenhum sintoma agudo relatado</p>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-xs font-black text-white uppercase tracking-tight">Resumo Evolutivo</span>
+                            <span className="text-[10px] text-slate-500 font-bold">Geral</span>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between p-2 bg-slate-900/50 rounded-lg border border-slate-800/50">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Status de Dor</span>
+                              <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
+                                <TrendingDown className="w-3 h-3" /> -15% esta semana
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 bg-slate-900/50 rounded-lg border border-slate-800/50">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Ganho de Força</span>
+                              <span className="text-xs font-black text-cyan-400 flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" /> +8% esta semana
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {wellnessHistory.length > 0 && (wellnessHistory[wellnessHistory.length - 1].symptoms?.length > 0 || wellnessHistory[wellnessHistory.length - 1].pain > 0) ? (
+                          <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
+                            <div className="flex justify-between items-center mb-4">
+                              <span className="text-xs font-black text-white uppercase tracking-tight">Sintomas Detectados</span>
+                              <span className="text-[10px] text-slate-500 font-bold">{wellnessHistory[wellnessHistory.length - 1].date}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {wellnessHistory[wellnessHistory.length - 1].pain > 0 && (
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${wellnessHistory[wellnessHistory.length - 1].pain >= 7 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : wellnessHistory[wellnessHistory.length - 1].pain >= 4 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                                  Dor: {wellnessHistory[wellnessHistory.length - 1].pain}/10
+                                </span>
+                              )}
+                              {wellnessHistory[wellnessHistory.length - 1].symptoms?.map((symptom: string) => (
+                                <span key={symptom} className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700">
+                                  {symptom}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-8 bg-slate-950/30 border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-center">
+                            <Activity className="w-8 h-8 text-slate-700 mb-3" />
+                            <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Selecione uma região para análise detalhada</p>
+                          </div>
+                        )}
                       </div>
                     )}
+                  </AnimatePresence>
 
                     <div className="grid grid-cols-1 gap-4">
                       <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl flex items-center justify-between">
@@ -1967,7 +2050,6 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                     </div>
                   </div>
                 </div>
-              </div>
             </CardContent>
           </Card>
         </div>

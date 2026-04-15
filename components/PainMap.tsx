@@ -324,11 +324,15 @@ const bodyParts: BodyPart[] = [
 export function PainMap({
   value,
   onChange,
+  onPartClick,
+  selectedPartId,
   readOnly = false,
   lang = "pt",
 }: {
   value: Record<string, { level: number; type: string }>;
   onChange?: (v: Record<string, { level: number; type: string }>) => void;
+  onPartClick?: (part: BodyPart) => void;
+  selectedPartId?: string;
   readOnly?: boolean;
   lang?: "pt" | "en";
 }) {
@@ -337,6 +341,10 @@ export function PainMap({
   const [tempType, setTempType] = useState<string[]>(["muscle"]);
 
   const handlePartClick = (part: BodyPart) => {
+    if (onPartClick) {
+      onPartClick(part);
+      return;
+    }
     if (readOnly) return;
     setSelectedPart(part);
     if (value[part.id]) {
@@ -383,37 +391,40 @@ export function PainMap({
   const getStyleProps = (id: string, isHovered: boolean) => {
     const data = value[id];
     const score = data?.level;
+    const isExternallySelected = selectedPartId === id;
 
     // Default Hologram State
     if (score === undefined) {
       return {
-        fill: isHovered ? "rgba(6, 182, 212, 0.3)" : "rgba(6, 182, 212, 0.05)",
-        stroke: isHovered ? "rgba(34, 211, 238, 1)" : "rgba(6, 182, 212, 0.5)",
-        filter: isHovered ? "url(#glow-cyan)" : "none",
-        strokeWidth: isHovered ? "2" : "1",
+        fill: (isHovered || isExternallySelected) ? "rgba(6, 182, 212, 0.3)" : "rgba(6, 182, 212, 0.05)",
+        stroke: (isHovered || isExternallySelected) ? "rgba(34, 211, 238, 1)" : "rgba(6, 182, 212, 0.5)",
+        filter: (isHovered || isExternallySelected) ? "url(#glow-cyan)" : "none",
+        strokeWidth: (isHovered || isExternallySelected) ? "2" : "1",
       };
     }
 
     // Pain States
+    const baseStyle = {
+      strokeWidth: (isHovered || isExternallySelected) ? "3" : "2",
+      filter: score <= 3 ? "url(#glow-yellow)" : score <= 6 ? "url(#glow-orange)" : "url(#glow-red)",
+    };
+
     if (score <= 3)
       return {
+        ...baseStyle,
         fill: "rgba(253, 224, 71, 0.6)", // Yellow
-        stroke: "#fef08a",
-        filter: "url(#glow-yellow)",
-        strokeWidth: "2",
+        stroke: (isHovered || isExternallySelected) ? "#ffffff" : "#fef08a",
       };
     if (score <= 6)
       return {
+        ...baseStyle,
         fill: "rgba(249, 115, 22, 0.6)", // Orange
-        stroke: "#fdba74",
-        filter: "url(#glow-orange)",
-        strokeWidth: "2",
+        stroke: (isHovered || isExternallySelected) ? "#ffffff" : "#fdba74",
       };
     return {
+      ...baseStyle,
       fill: "rgba(239, 68, 68, 0.6)", // Red
-      stroke: "#fca5a5",
-      filter: "url(#glow-red)",
-      strokeWidth: "2",
+      stroke: (isHovered || isExternallySelected) ? "#ffffff" : "#fca5a5",
     };
   };
 
@@ -470,23 +481,23 @@ export function PainMap({
           </defs>
 
           {parts.map((part) => {
-            const isSelected = selectedPart?.id === part.id;
+            const isSelected = selectedPart?.id === part.id || selectedPartId === part.id;
             const style = getStyleProps(part.id, isSelected);
 
             const commonProps = {
               ...style,
-              className: `transition-all duration-300 ${!readOnly ? "cursor-crosshair hover:brightness-125" : ""}`,
+              className: `transition-all duration-300 ${(!readOnly || onPartClick) ? "cursor-crosshair hover:brightness-125" : ""}`,
               onClick: () => handlePartClick(part),
               transform: part.transform,
               onMouseEnter: (e: React.MouseEvent<SVGElement>) => {
-                if (!readOnly && value[part.id] === undefined) {
+                if ((!readOnly || onPartClick) && value[part.id] === undefined) {
                   e.currentTarget.style.fill = "rgba(6, 182, 212, 0.3)";
                   e.currentTarget.style.stroke = "rgba(34, 211, 238, 1)";
                   e.currentTarget.style.filter = "url(#glow-cyan)";
                 }
               },
               onMouseLeave: (e: React.MouseEvent<SVGElement>) => {
-                if (!readOnly && value[part.id] === undefined && !isSelected) {
+                if ((!readOnly || onPartClick) && value[part.id] === undefined && !isSelected) {
                   e.currentTarget.style.fill = "rgba(6, 182, 212, 0.05)";
                   e.currentTarget.style.stroke = "rgba(6, 182, 212, 0.5)";
                   e.currentTarget.style.filter = "none";
