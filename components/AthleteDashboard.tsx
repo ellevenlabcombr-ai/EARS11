@@ -41,7 +41,11 @@ import {
   LogOut,
   User,
   X,
-  Brain
+  Brain,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCircle2 as CheckCircle
 } from "lucide-react";
 import Image from "next/image";
 import { PainMap } from "@/components/PainMap";
@@ -420,6 +424,9 @@ export function AthleteDashboard({
   const [coins, setCoins] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [respondedToday, setRespondedToday] = useState<boolean>(false);
+  const [todaySummary, setTodaySummary] = useState<any>(null);
+  const [workloadData, setWorkloadData] = useState<any[]>([]);
 
   const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
   const [setupCycleLength, setSetupCycleLength] = useState(28);
@@ -479,99 +486,115 @@ export function AthleteDashboard({
     
     setLoadingHistory(true);
     setLoadingAthlete(true);
-    if (hasSupabaseConfig && supabase) {
-      try {
-        console.log("Fetching data for athleteId:", athleteId);
-        let historyResponse = await supabase
-          .from("wellness_records")
+    
+    try {
+      console.log("Fetching data for athleteId:", athleteId);
+      
+      // 1. Fetch athlete profile
+      const { data: athlete, error: athleteError } = await supabase
+        .from("athletes")
+        .select("*")
+        .eq("id", athleteId)
+        .single();
+      
+      if (athleteError) {
+        console.error("Athlete fetch error:", athleteError);
+      } else if (athlete) {
+        setAthleteData(athlete);
+        setXp(athlete.xp || 0);
+        setCoins(athlete.coins || 0);
+        setAthleteCode(athlete.athlete_code);
+      }
+
+      // 2. Fetch wellness history
+      let historyResponse = await supabase
+        .from("wellness_records")
+        .select("*")
+        .eq("athlete_id", athleteId)
+        .order("record_date", { ascending: false })
+        .limit(15)
+        .abortSignal(controller.signal);
+
+      let finalHistoryData = [];
+
+      // Fallback if wellness_records fetch fails or is empty, try check_ins
+      if (historyResponse.error || (historyResponse.data && historyResponse.data.length === 0)) {
+        console.warn("wellness_records empty or error, trying check_ins");
+        const { data: checkInData, error: checkInError } = await supabase
+          .from("check_ins")
           .select("*")
           .eq("athlete_id", athleteId)
-          .order("record_date", { ascending: false })
-          .limit(10)
-          .abortSignal(controller.signal);
-
-        // Fallback if wellness_records fetch fails or is empty, try check_ins
-        if (historyResponse.error || (historyResponse.data && historyResponse.data.length === 0)) {
-          console.warn("wellness_records empty or error, trying check_ins");
-          const checkInResp = await supabase
-            .from("check_ins")
-            .select("*")
-            .eq("athlete_id", athleteId)
-            .order("created_at", { ascending: false })
-            .limit(10)
-            .abortSignal(controller.signal);
-          
-          if (!checkInResp.error) {
-            historyResponse = checkInResp;
-          }
+          .order("created_at", { ascending: false })
+          .limit(15);
+        
+        if (checkInData) {
+          finalHistoryData = checkInData.map(d => ({
+            ...d,
+            record_date: d.record_date || d.date || d.created_at.split('T')[0],
+            sleep_quality: d.sleep_quality,
+            fatigue_level: d.energy_level,
+            muscle_soreness: d.muscle_soreness,
+            stress_level: d.stress_level,
+            readiness_score: d.readiness_score
+          }));
         }
+      } else if (historyResponse.data) {
+        finalHistoryData = historyResponse.data;
+      }
 
-        const athleteResponse = await supabase
-            .from("athletes")
-            .select("id, name, nickname, avatar_url, birth_date, last_period_date, cycle_length, is_menstruating, xp, coins")
-            .eq("id", athleteId)
-            .single()
-            .abortSignal(controller.signal);
+      setHistoryData(finalHistoryData);
+      
+      // Check if responded today
+      const today = getLocalDateString();
+      const todayRecord = finalHistoryData.find(r => r.record_date === today);
+      if (todayRecord) {
+        setRespondedToday(true);
+        setTodaySummary(todayRecord);
+      } else {
+        setRespondedToday(false);
+        setTodaySummary(null);
+      }
 
-        clearTimeout(timeoutId);
+      // 3. Fetch workload data
+      const { data: loadData } = await supabase
+        .from("physical_load_assessments")
+        .select("*")
+        .eq("athlete_id", athleteId)
+        .order("assessment_date", { ascending: false })
+        .limit(15);
+      
+      if (loadData) {
+        setWorkloadData(loadData);
+      }
 
-        if (historyResponse.error) {
-          console.error("History fetch error:", historyResponse.error);
-          const err = historyResponse.error;
-          console.error("History fetch error details:", JSON.stringify({
-            message: err.message,
-            code: err.code,
-            details: err.details,
-            hint: err.hint
-          }, null, 2));
-        } else if (historyResponse.data) {
-          console.log("History data fetched:", historyResponse.data.length, "records");
-          setHistoryData(historyResponse.data);
-          
-          // Fetch pain reports for the latest check-in
-          if (historyResponse.data.length > 0) {
-            const latestId = historyResponse.data[0].id;
-            const { data: painData, error: painError } = await supabase
-              .from("pain_reports")
-              .select("body_part_id, pain_level, pain_type")
-              .eq("check_in_id", latestId)
-              .limit(100)
-              .abortSignal(controller.signal);
-            
-            if (!painError && painData) {
-              const mappedPain: Record<string, { level: number; type: string }> = {};
-              painData.forEach((p: any) => {
-                mappedPain[p.body_part_id] = { level: p.pain_level, type: p.pain_type || "acute" };
-              });
-              setLatestPainMap(mappedPain);
-            }
-          }
-        }
-
-        if (athleteResponse.error) {
-          console.error("Athlete fetch error (full object):", athleteResponse.error);
-          console.error("Athlete fetch error message:", athleteResponse.error?.message);
-          console.error("Athlete fetch error code:", athleteResponse.error?.code);
-          console.error("Athlete fetch error details:", athleteResponse.error?.details);
-          console.error("Athlete fetch error hint:", athleteResponse.error?.hint);
-        } else if (athleteResponse.data) {
-          console.log("Athlete data fetched:", athleteResponse.data);
-          setXp(athleteResponse.data.xp || 0);
-          setCoins(athleteResponse.data.coins || 0);
-          setAthleteCode(athleteResponse.data.athlete_code);
-          setAthleteData(athleteResponse.data);
-        } else {
-          console.warn("No athlete data found for ID:", athleteId);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch data in AthleteDashboard:", err);
-        if (err.name === 'AbortError') {
-          console.error("Fetch timed out after 30 seconds");
+      // 4. Fetch latest pain map (from the most recent record)
+      if (finalHistoryData.length > 0) {
+        const latestId = finalHistoryData[0].id;
+        const { data: painData, error: painError } = await supabase
+          .from("pain_reports")
+          .select("body_part_id, pain_level, pain_type")
+          .eq("check_in_id", latestId)
+          .limit(100);
+        
+        if (!painError && painData) {
+          const mappedPain: Record<string, { level: number; type: string }> = {};
+          painData.forEach((p: any) => {
+            mappedPain[p.body_part_id] = { level: p.pain_level, type: p.pain_type || "acute" };
+          });
+          setLatestPainMap(mappedPain);
         }
       }
+
+      clearTimeout(timeoutId);
+    } catch (err: any) {
+      console.error("Failed to fetch data in AthleteDashboard:", err);
+      if (err.name === 'AbortError') {
+        console.error("Fetch timed out after 30 seconds");
+      }
+    } finally {
+      setLoadingHistory(false);
+      setLoadingAthlete(false);
     }
-    setLoadingHistory(false);
-    setLoadingAthlete(false);
   }, [athleteId]);
 
   useEffect(() => {
@@ -1113,7 +1136,225 @@ export function AthleteDashboard({
           { day: "2-digit", month: "2-digit" },
         ),
         score: record.readiness_score,
+        sleep: (record.sleep_quality || 0) * 20,
+        fatigue: (record.fatigue_level || 0) * 20,
+        stress: (record.stress_level || 0) * 20,
       }));
+
+    const painChartData = historyData
+      .slice()
+      .reverse()
+      .map((record) => ({
+        date: parseDateString(record.record_date || record.created_at).toLocaleDateString(
+          lang === "pt" ? "pt-BR" : "en-US",
+          { day: "2-digit", month: "2-digit" },
+        ),
+        level: record.pain_level || 0,
+      }));
+
+    const workloadChartData = workloadData
+      .slice()
+      .reverse()
+      .map((r) => ({
+        date: parseDateString(r.assessment_date).toLocaleDateString(
+          lang === "pt" ? "pt-BR" : "en-US",
+          { day: "2-digit", month: "2-digit" },
+        ),
+        load: r.score,
+        readiness: historyData.find(h => h.record_date === r.assessment_date.split('T')[0])?.readiness_score || 50
+      }));
+
+    const WellnessWidget = () => {
+      if (!respondedToday) {
+        return (
+          <Card className="bg-[#0A1120] border-amber-500/30 overflow-hidden relative group">
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent pointer-events-none" />
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-amber-500/20 rounded-2xl border border-amber-500/30 animate-pulse">
+                    <Zap className="w-8 h-8 text-amber-400" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Check-in de hoje pendente</h3>
+                    <p className="text-slate-400 text-sm">Sua bateria clínica precisa ser atualizada para gerar insights.</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => setView("questionnaire")}
+                  className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-widest px-8 py-6 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all hover:scale-105"
+                >
+                  Responder agora
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }
+
+      const summaryMetrics = [
+        { label: lang === "pt" ? "Sono" : "Sleep", value: todaySummary?.sleep_quality || 0, icon: Moon, color: "text-blue-400" },
+        { label: lang === "pt" ? "Fadiga" : "Fatigue", value: todaySummary?.fatigue_level || 0, icon: Battery, color: "text-amber-400" },
+        { label: lang === "pt" ? "Dor" : "Pain", value: Math.max(0, ...Object.values(latestPainMap).map(p => p.level)), icon: Activity, color: "text-rose-400" },
+      ];
+
+      return (
+        <Card className="bg-[#0A1120] border-emerald-500/30 overflow-hidden relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-500/20 rounded-2xl border border-emerald-500/30">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Check-in Concluído</h3>
+                  <p className="text-slate-400 text-sm">Dados sincronizados com sucesso. Veja seu resumo abaixo.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                {summaryMetrics.map((m, i) => (
+                  <div key={i} className="flex-1 md:flex-none bg-slate-900/50 border border-slate-800 p-3 rounded-xl text-center min-w-[80px]">
+                    <m.icon className={`w-5 h-5 mx-auto mb-1 ${m.color}`} />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{m.label}</p>
+                    <p className="text-lg font-black text-white">{m.value}{m.label === "Dor" ? "/10" : "/5"}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 w-full md:w-auto">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedRecord(todaySummary)}
+                  className="flex-1 md:flex-none border-slate-800 text-slate-300 hover:bg-slate-800"
+                >
+                  Detalhes
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setView("questionnaire")}
+                  className="flex-1 md:flex-none border-slate-800 text-slate-300 hover:bg-slate-800"
+                >
+                  Editar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    };
+
+    const ClinicalInsights = () => {
+      const insights = [];
+      
+      if (historyData.length >= 2) {
+        const latest = historyData[0];
+        const previous = historyData[1];
+        
+        if (latest.readiness_score < previous.readiness_score - 15) {
+          insights.push({
+            type: "warning",
+            title: lang === "pt" ? "Queda de Prontidão" : "Readiness Drop",
+            message: lang === "pt" ? `Sua prontidão caiu ${previous.readiness_score - latest.readiness_score}% desde ontem. Considere reduzir a carga.` : `Your readiness dropped ${previous.readiness_score - latest.readiness_score}% since yesterday. Consider reducing load.`,
+            icon: TrendingDown
+          });
+        }
+        
+        const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
+        if (maxPain > 6) {
+          insights.push({
+            type: "critical",
+            title: lang === "pt" ? "Alerta de Dor" : "Pain Alert",
+            message: lang === "pt" ? "Nível de dor crítico detectado. Informe seu fisioterapeuta imediatamente." : "Critical pain level detected. Inform your physical therapist immediately.",
+            icon: AlertTriangle
+          });
+        }
+      }
+
+      if (insights.length === 0) return null;
+
+      return (
+        <div className="space-y-4">
+          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+            <Lightbulb className="w-4 h-4" />
+            Insights Clínicos
+          </h3>
+          <div className="grid gap-4">
+            {insights.map((insight, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-4 rounded-2xl border ${
+                  insight.type === 'critical' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'
+                } flex gap-4`}
+              >
+                <div className={`p-2 rounded-lg h-fit ${
+                  insight.type === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
+                }`}>
+                  <insight.icon className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black text-white uppercase tracking-tight">{insight.title}</p>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{insight.message}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const RecoveryChecklist = () => {
+      const tasks = [];
+      const latest = historyData[0];
+      
+      if (latest) {
+        if (latest.sleep_quality <= 2) {
+          tasks.push({ id: 'sleep', title: "Higiene do sono (90min antes)", icon: Moon });
+        }
+        if (latest.fatigue_level >= 4) {
+          tasks.push({ id: 'recovery', title: "Sessão de Recovery (Botas/Gelo)", icon: RefreshCcw });
+        }
+        const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
+        if (maxPain >= 4) {
+          tasks.push({ id: 'physio', title: "Avaliação com Fisioterapia", icon: Activity });
+        }
+        if (latest.stress_level >= 4) {
+          tasks.push({ id: 'meditation', title: "Meditação / Respiração (10min)", icon: Brain });
+        }
+      }
+
+      if (tasks.length === 0) {
+        tasks.push({ id: 'default', title: "Manter hidratação constante", icon: Droplets });
+        tasks.push({ id: 'default2', title: "Mobilidade articular matinal", icon: ActivitySquare });
+      }
+
+      return (
+        <div className="space-y-4">
+          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+            <CheckCircle className="w-4 h-4" />
+            Checklist de Recuperação
+          </h3>
+          <div className="grid gap-3">
+            {tasks.map((task) => (
+              <div key={task.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 group hover:border-slate-700 transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-white transition-colors">
+                    <task.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-300">{task.title}</span>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-slate-700 flex items-center justify-center group-hover:border-emerald-500 transition-all">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-all" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
 
     // Gamification & Insights Logic
     const latestCheckIn = historyData[0];
@@ -1392,258 +1633,211 @@ export function AthleteDashboard({
           </>
         )}
 
-        {/* Main Action Section */}
-        <div className="flex flex-col gap-4 max-w-md mx-auto w-full">
-          <Button
-            size="lg"
-            onClick={() => setView("questionnaire")}
-            disabled={hasCheckedInToday}
-            className={`w-full font-black uppercase tracking-widest ${theme.shadowStrong} py-8 text-lg rounded-2xl transition-all ${
-              hasCheckedInToday
-                ? "bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700"
-                : `${theme.button} text-white hover:scale-105`
-            }`}
-          >
-            {hasCheckedInToday ? (
-              <>
-                <CheckCircle2 className="w-6 h-6 mr-3 text-green-400" />
-                {lang === "pt" ? "Check-in Concluído" : "Check-in Complete"}
-              </>
-            ) : (
-              <>
-                <Zap className="w-6 h-6 mr-3 text-yellow-400" />
-                {lang === "pt"
-                  ? "Fazer Check-in (+50 XP)"
-                  : "Do Check-in (+50 XP)"}
-              </>
-            )}
-          </Button>
+        <WellnessWidget />
 
-          {athleteGender === "F" && (
-            <Button
-              size="lg"
-              onClick={() => setView("cycle")}
-              className={`w-full font-black uppercase tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.3)] py-6 text-md rounded-2xl transition-all bg-rose-900/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/60 hover:scale-105`}
-            >
-              <Droplets className="w-5 h-5 mr-3 text-rose-400" />
-              {lang === "pt" ? "Meu Ciclo" : "My Cycle"}
-            </Button>
-          )}
-        </div>
-
-        {/* Wellness Summary Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
-              <ActivitySquare className={`w-6 h-6 ${theme.text}`} />
-              {lang === "pt" ? "Resumo Wellness" : "Wellness Summary"}
-            </h3>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              {latestCheckIn ? parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toLocaleDateString() : "--"}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {metrics.filter(m => m.id !== 'menstrual_cycle').slice(0, 8).map(metric => {
-              let value = null;
-              if (latestCheckIn) {
-                switch(metric.id) {
-                  case 'sleep': value = latestCheckIn.sleep_quality; break;
-                  case 'energy': value = latestCheckIn.fatigue_level ? (6 - latestCheckIn.fatigue_level) : null; break;
-                  case 'stress': value = latestCheckIn.stress_level; break;
-                  case 'hydration': value = latestCheckIn.hydration_perception; break;
-                  case 'leg_heaviness': value = latestCheckIn.muscle_soreness ? Math.ceil(latestCheckIn.muscle_soreness / 2) : null; break;
-                  default: value = (latestCheckIn as any)[metric.id];
-                }
-              }
-              const options = getOptionsForMetric(metric.id, lang);
-              const option = options.find(o => o.value === value);
-              
-              return (
-                <Card key={metric.id} className="bg-slate-900/40 border-slate-800/50 overflow-hidden group hover:border-cyan-500/30 transition-all">
-                  <CardContent className="p-4 flex flex-col items-center text-center space-y-2">
-                    <div className={`p-2 rounded-xl ${theme.bgAlpha} ${theme.text}`}>
-                      <metric.icon className="w-5 h-5" />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate w-full">{metric.label}</p>
-                    {option ? (
-                      <div className="flex flex-col items-center">
-                        <span className="text-xl">{option.emoji}</span>
-                        <span className={`text-[10px] font-bold ${option.color.replace('bg-', 'text-')} uppercase mt-1`}>{option.label}</span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-600 font-bold">--</span>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Pain Map Summary Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
-              <Activity className="w-6 h-6 text-rose-500" />
-              {lang === "pt" ? "Mapa de Dor" : "Pain Map"}
-            </h3>
-            {Object.keys(finalPainMap).length > 0 && (
-              <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20 uppercase tracking-widest">
-                {Object.keys(finalPainMap).length} {lang === "pt" ? "Locais" : "Locations"}
-              </span>
-            )}
-          </div>
-          
-          <Card className="bg-slate-900/40 border-slate-800/50 overflow-hidden shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-8 items-center justify-center">
-                <div className="w-full lg:w-1/2 shrink-0">
-                  <PainMap 
-                    value={finalPainMap} 
-                    readOnly={true}
-                  />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
+          <div className="lg:col-span-8 space-y-8">
+            {/* Charts Section */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  Evolução de Wellness & Prontidão
+                </h3>
+              </div>
+              <Card className="bg-[#0A1120] border-slate-800/50 p-6">
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="date" stroke="#475569" fontSize={10} tickMargin={10} />
+                      <YAxis stroke="#475569" fontSize={10} domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "12px" }}
+                        itemStyle={{ fontWeight: "bold" }}
+                      />
+                      <Line type="monotone" dataKey="score" name="Prontidão" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="sleep" name="Sono" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      <Line type="monotone" dataKey="fatigue" name="Fadiga" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="flex-1 space-y-6 w-full">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-end">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
-                      <p className={`text-xl font-black ${latestCheckIn?.muscle_soreness && latestCheckIn.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {latestCheckIn?.muscle_soreness || 0}/10
-                      </p>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          (latestCheckIn?.muscle_soreness || 0) <= 3 ? 'bg-emerald-500' : 
-                          (latestCheckIn?.muscle_soreness || 0) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${((latestCheckIn?.muscle_soreness || 0) / 10) * 100}%` }}
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <ActivitySquare className="w-4 h-4" />
+                  Intensidade de Dor (NPS)
+                </h3>
+                <Card className="bg-[#0A1120] border-slate-800/50 p-6">
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={painChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="date" stroke="#475569" fontSize={10} tickMargin={10} />
+                        <YAxis stroke="#475569" fontSize={10} domain={[0, 10]} />
+                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "12px" }} />
+                        <Line type="stepAfter" dataKey="level" name="Dor" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              </div>
+
+              <div className="space-y-6">
+                <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Dumbbell className="w-4 h-4" />
+                  Carga vs Prontidão
+                </h3>
+                <Card className="bg-[#0A1120] border-slate-800/50 p-6">
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={workloadChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="date" stroke="#475569" fontSize={10} tickMargin={10} />
+                        <YAxis stroke="#475569" fontSize={10} domain={[0, 100]} />
+                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "12px" }} />
+                        <Line type="monotone" dataKey="load" name="Carga" stroke="#a855f7" strokeWidth={3} dot={{ r: 4 }} />
+                        <Line type="monotone" dataKey="readiness" name="Prontidão" stroke="#10b981" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+            {/* Pain Map Summary Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-rose-500" />
+                  {lang === "pt" ? "Mapa de Dor Atual" : "Current Pain Map"}
+                </h3>
+              </div>
+              
+              <Card className="bg-slate-900/40 border-slate-800/50 overflow-hidden shadow-xl">
+                <CardContent className="p-6">
+                  <div className="flex flex-col lg:flex-row gap-8 items-center justify-center">
+                    <div className="w-full lg:w-1/2 shrink-0">
+                      <PainMap 
+                        value={finalPainMap} 
+                        readOnly={true}
                       />
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.keys(finalPainMap).length > 0 ? (
-                        Object.entries(finalPainMap).map(([part, data]) => (
-                          <span 
-                            key={part}
-                            className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"
-                          >
-                            {getPainLocationLabel(part)}
-                            <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <div className="w-full text-center py-8 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
-                          <CheckCircle2 className="w-8 h-8 text-emerald-500/20 mx-auto mb-2" />
-                          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
-                            {lang === "pt" ? "Nenhuma dor relatada" : "No pain reported"}
+                    <div className="flex-1 space-y-6 w-full">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-end">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
+                          <p className={`text-xl font-black ${latestCheckIn?.muscle_soreness && latestCheckIn.muscle_soreness > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {latestCheckIn?.muscle_soreness || 0}/10
                           </p>
                         </div>
-                      )}
+                        <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              (latestCheckIn?.muscle_soreness || 0) <= 3 ? 'bg-emerald-500' : 
+                              (latestCheckIn?.muscle_soreness || 0) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${((latestCheckIn?.muscle_soreness || 0) / 10) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.keys(finalPainMap).length > 0 ? (
+                            Object.entries(finalPainMap).map(([part, data]) => (
+                              <span 
+                                key={part}
+                                className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2 group hover:bg-rose-500/20 transition-all"
+                              >
+                                {getPainLocationLabel(part)}
+                                <span className="text-[9px] opacity-70 bg-rose-500/20 px-1.5 py-0.5 rounded">Nível {data.level}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <div className="w-full text-center py-8 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
+                              <CheckCircle2 className="w-8 h-8 text-emerald-500/20 mx-auto mb-2" />
+                              <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                                {lang === "pt" ? "Nenhuma dor relatada" : "No pain reported"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Weekly Tracker & Streak */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50 flex flex-col justify-between">
-            <div className="flex items-center gap-2 mb-4">
-              <CalendarDays className={`w-6 h-6 ${theme.text}`} />
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-                {lang === "pt" ? "Missões da Semana" : "Weekly Quests"}
-              </h3>
+                </CardContent>
+              </Card>
             </div>
-            <div className="flex justify-between items-center">
-              {last7Days.map((day, i) => (
-                <div key={i} className="flex flex-col items-center gap-2">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
-                      day.hasRecord
-                        ? `${theme.bgAlpha} ${theme.border} ${theme.text} ${theme.shadow}`
-                        : day.isToday
-                          ? "bg-slate-800 border-slate-600 text-slate-500 border-dashed"
-                          : "bg-slate-900 border-slate-800 text-slate-700"
-                    }`}
-                  >
-                    {day.hasRecord ? (
-                      <CheckCircle2 className="w-5 h-5" />
-                    ) : (
-                      <span className="text-sm font-bold">
-                        {day.dayName.charAt(0)}
-                      </span>
-                    )}
+          </div>
+
+          <div className="lg:col-span-4 space-y-8">
+            <ClinicalInsights />
+            <RecoveryChecklist />
+            
+            {/* Weekly Tracker & Streak */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Trophy className="w-4 h-4" />
+                Progresso Semanal
+              </h3>
+              <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50">
+                <div className="flex justify-between items-center mb-6">
+                  {last7Days.map((day, i) => (
+                    <div key={i} className="flex flex-col items-center gap-2">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                          day.hasRecord
+                            ? `${theme.bgAlpha} ${theme.border} ${theme.text}`
+                            : day.isToday
+                              ? "bg-slate-800 border-slate-600 text-slate-500 border-dashed"
+                              : "bg-slate-900 border-slate-800 text-slate-700"
+                        }`}
+                      >
+                        {day.hasRecord ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <span className="text-[10px] font-bold">
+                            {day.dayName.charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-orange-500" />
+                    <span className="text-2xl font-black text-white">{streak}</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Dias</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-500" />
+                    <span className="text-2xl font-black text-white">{athleteLevel}</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nível</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50 flex flex-col justify-between">
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="w-6 h-6 text-orange-500" />
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-                {lang === "pt" ? "Ofensiva Atual" : "Current Streak"}
-              </h3>
-            </div>
-            <div className="flex items-end gap-3">
-              <span className="text-5xl font-black text-orange-400 drop-shadow-[0_0_10px_rgba(249,115,22,0.3)]">
-                {streak}
-              </span>
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest pb-1">
-                {lang === "pt" ? "Dias Seguidos" : "Days in a row"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Coach's Insight & Recent Notes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className={`${theme.bgAlpha} p-6 rounded-2xl border ${theme.border} relative overflow-hidden group`}>
-            <div className={`absolute -right-4 -top-4 w-24 h-24 ${theme.bgAlpha} rounded-full blur-2xl opacity-50 group-hover:opacity-80 transition-opacity`}></div>
-            <div className="flex items-start gap-4 relative z-10">
-              <div className={`p-3 ${theme.bgAlpha} rounded-xl border ${theme.border} shrink-0`}>
-                <Lightbulb className={`w-8 h-8 ${theme.text}`} />
-              </div>
-              <div>
-                <h3 className={`text-base font-black ${theme.icon} uppercase tracking-wider mb-1`}>
-                  {lang === "pt" ? "Dica da Cris" : "Cris's Insight"}
-                </h3>
-                <p className="text-slate-300 font-medium leading-relaxed text-lg">
-                  {getInsight()}
-                </p>
               </div>
             </div>
-          </div>
 
-          <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50 flex flex-col justify-between group hover:border-blue-500/30 transition-all">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <MessageSquare className="w-5 h-5 text-blue-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-widest">
-                {lang === "pt" ? "Notas Recentes" : "Recent Notes"}
-              </h3>
-            </div>
-            <div className="flex-1">
-              {latestCheckIn?.notes ? (
-                <p className="text-sm text-slate-400 italic line-clamp-4 leading-relaxed">
-                  &quot;{latestCheckIn.notes}&quot;
-                </p>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full py-4 opacity-40">
-                  <MessageSquare className="w-8 h-8 text-slate-600 mb-2" />
-                  <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
-                    {lang === "pt" ? "Nenhuma nota" : "No notes"}
+            {/* Coach's Insight */}
+            <div className={`${theme.bgAlpha} p-6 rounded-2xl border ${theme.border} relative overflow-hidden group`}>
+              <div className="flex items-start gap-4 relative z-10">
+                <div className={`p-3 ${theme.bgAlpha} rounded-xl border ${theme.border} shrink-0`}>
+                  <Lightbulb className={`w-6 h-6 ${theme.text}`} />
+                </div>
+                <div>
+                  <h3 className={`text-xs font-black ${theme.icon} uppercase tracking-wider mb-1`}>
+                    Dica da Cris
+                  </h3>
+                  <p className="text-slate-300 font-medium leading-relaxed text-sm">
+                    {getInsight()}
                   </p>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -1671,56 +1865,6 @@ export function AthleteDashboard({
             </div>
           ) : (
             <div className="space-y-6">
-              {chartData.length > 1 && (
-                <Card className="bg-[#0A1120] border-slate-800/50 p-4">
-                  <div className="h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#1e293b"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#475569"
-                          fontSize={10}
-                          tickMargin={10}
-                        />
-                        <YAxis
-                          stroke="#475569"
-                          fontSize={10}
-                          domain={[0, 100]}
-                          hide
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#0f172a",
-                            border: "1px solid #334155",
-                            borderRadius: "8px",
-                          }}
-                          itemStyle={{ color: "#818cf8", fontWeight: "bold" }}
-                          labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="score"
-                          stroke="#6366f1"
-                          strokeWidth={3}
-                          dot={{
-                            fill: "#0f172a",
-                            stroke: "#6366f1",
-                            strokeWidth: 2,
-                            r: 4,
-                          }}
-                          activeDot={{ r: 6, fill: "#818cf8", stroke: "#fff" }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              )}
-
               <div className="grid gap-4">
                 {historyData.map((record) => {
                   const date = parseDateString(record.record_date || record.created_at);
