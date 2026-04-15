@@ -1529,22 +1529,7 @@ export function AthleteDashboard({
       );
     };
 
-    const ClinicalInsights = () => {
-      const insights = [];
-      
-      if (checkins.length >= 2) {
-        const latest = checkins[0];
-        const previous = checkins[1];
-        
-        if (latest.readiness_score < previous.readiness_score - 15) {
-          insights.push({
-            type: "warning",
-            title: lang === "pt" ? "Queda de Prontidão" : "Readiness Drop",
-            message: lang === "pt" ? `Sua prontidão caiu ${previous.readiness_score - latest.readiness_score}% desde ontem. Considere reduzir a carga.` : `Your readiness dropped ${previous.readiness_score - latest.readiness_score}% since yesterday. Consider reducing load.`,
-            icon: TrendingDown
-          });
-        }
-        
+            
         const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
         if (maxPain > 6) {
           insights.push({
