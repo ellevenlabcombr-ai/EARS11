@@ -31,11 +31,42 @@ interface EvolutionData {
   rom: number;
 }
 
+type RehabPhase = "Aguda" | "Subaguda" | "Funcional" | "Retorno ao Esporte";
+
 interface ClinicalEvolutionPanelProps {
   regionName: string;
   data: EvolutionData[];
   lang?: "pt" | "en";
 }
+
+const getRehabPhase = (last: EvolutionData): { phase: RehabPhase; color: string; nextStep: string } => {
+  if (last.pain >= 7 || last.strength < 40 || last.rom < 50) {
+    return { 
+      phase: "Aguda", 
+      color: "text-rose-500", 
+      nextStep: "Controle de dor e edema. Proteção tecidual." 
+    };
+  }
+  if (last.pain >= 4 || last.strength < 70 || last.rom < 80) {
+    return { 
+      phase: "Subaguda", 
+      color: "text-amber-500", 
+      nextStep: "Ganho de ADM passiva/ativa e ativação muscular inicial." 
+    };
+  }
+  if (last.pain >= 1 || last.strength < 90 || last.rom < 95) {
+    return { 
+      phase: "Funcional", 
+      color: "text-cyan-500", 
+      nextStep: "Fortalecimento dinâmico e exercícios proprioceptivos." 
+    };
+  }
+  return { 
+    phase: "Retorno ao Esporte", 
+    color: "text-emerald-500", 
+    nextStep: "Treino de gesto esportivo e carga máxima controlada." 
+  };
+};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -60,6 +91,7 @@ export function ClinicalEvolutionPanel({ regionName, data, lang = "pt" }: Clinic
   // Calculate variations
   const first = data[0];
   const last = data[data.length - 1];
+  const { phase, color: phaseColor, nextStep } = getRehabPhase(last);
   
   const deltaPain = last.pain - first.pain;
   const deltaStrength = last.strength - first.strength;
@@ -90,11 +122,28 @@ export function ClinicalEvolutionPanel({ regionName, data, lang = "pt" }: Clinic
             <h3 className="text-lg font-black text-white uppercase tracking-tight">
               Evolução: {regionName}
             </h3>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Últimos 7 dias de acompanhamento
-            </p>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${phaseColor}`}>
+                Fase: {phase}
+              </span>
+              <span className="w-1 h-1 rounded-full bg-slate-700" />
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Últimos 7 dias
+              </p>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Next Step Card */}
+      <div className="bg-cyan-500/5 border border-cyan-500/20 p-4 rounded-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+          <TrendingUp className="w-12 h-12 text-cyan-500" />
+        </div>
+        <p className="text-[8px] font-black text-cyan-500 uppercase tracking-widest mb-1">Próximo Passo Clínico</p>
+        <p className="text-xs font-bold text-white leading-relaxed">
+          {nextStep}
+        </p>
       </div>
 
       {/* Variation Cards */}

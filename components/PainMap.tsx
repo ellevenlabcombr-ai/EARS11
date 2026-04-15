@@ -329,8 +329,8 @@ export function PainMap({
   readOnly = false,
   lang = "pt",
 }: {
-  value: Record<string, { level: number; type: string }>;
-  onChange?: (v: Record<string, { level: number; type: string }>) => void;
+  value: Record<string, { level: number; type: string; phase?: string }>;
+  onChange?: (v: Record<string, { level: number; type: string; phase?: string }>) => void;
   onPartClick?: (part: BodyPart) => void;
   selectedPartId?: string;
   readOnly?: boolean;
@@ -361,7 +361,11 @@ export function PainMap({
     if (selectedPart && onChange && tempLevel !== null) {
       onChange({
         ...value,
-        [selectedPart.id]: { level: tempLevel, type: tempType.join(', ') },
+        [selectedPart.id]: { 
+          ...value[selectedPart.id],
+          level: tempLevel, 
+          type: tempType.join(', ') 
+        },
       });
       setSelectedPart(null);
     }
@@ -391,10 +395,11 @@ export function PainMap({
   const getStyleProps = (id: string, isHovered: boolean) => {
     const data = value[id];
     const score = data?.level;
+    const phase = data?.phase;
     const isExternallySelected = selectedPartId === id;
 
     // Default Hologram State
-    if (score === undefined) {
+    if (score === undefined && !phase) {
       return {
         fill: (isHovered || isExternallySelected) ? "rgba(6, 182, 212, 0.3)" : "rgba(6, 182, 212, 0.05)",
         stroke: (isHovered || isExternallySelected) ? "rgba(34, 211, 238, 1)" : "rgba(6, 182, 212, 0.5)",
@@ -403,7 +408,25 @@ export function PainMap({
       };
     }
 
-    // Pain States
+    // Phase-based coloring (Rehab Progression)
+    if (phase) {
+      const phaseStyles: Record<string, any> = {
+        "Aguda": { fill: "rgba(244, 63, 94, 0.6)", stroke: "#fda4af", glow: "url(#glow-red)" },
+        "Subaguda": { fill: "rgba(245, 158, 11, 0.6)", stroke: "#fcd34d", glow: "url(#glow-orange)" },
+        "Funcional": { fill: "rgba(6, 182, 212, 0.6)", stroke: "#67e8f9", glow: "url(#glow-cyan)" },
+        "Retorno ao Esporte": { fill: "rgba(16, 185, 129, 0.6)", stroke: "#6ee7b7", glow: "url(#glow-green)" },
+      };
+      
+      const style = phaseStyles[phase] || phaseStyles["Aguda"];
+      return {
+        fill: style.fill,
+        stroke: (isHovered || isExternallySelected) ? "#ffffff" : style.stroke,
+        filter: style.glow,
+        strokeWidth: (isHovered || isExternallySelected) ? "3" : "2",
+      };
+    }
+
+    // Pain States (Fallback)
     const baseStyle = {
       strokeWidth: (isHovered || isExternallySelected) ? "3" : "2",
       filter: score <= 3 ? "url(#glow-yellow)" : score <= 6 ? "url(#glow-orange)" : "url(#glow-red)",
@@ -475,6 +498,10 @@ export function PainMap({
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
             <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="5" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>

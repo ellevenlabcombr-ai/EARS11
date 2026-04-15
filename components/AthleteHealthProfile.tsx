@@ -590,6 +590,24 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
     return data;
   };
 
+  const getRegionPhase = (regionId: string) => {
+    const data = generateRegionEvolution(regionId);
+    const last = data[data.length - 1];
+    
+    if (last.pain >= 7 || last.strength < 40 || last.rom < 50) return "Aguda";
+    if (last.pain >= 4 || last.strength < 70 || last.rom < 80) return "Subaguda";
+    if (last.pain >= 1 || last.strength < 90 || last.rom < 95) return "Funcional";
+    return "Retorno ao Esporte";
+  };
+
+  const volleyballPriorityRegions = [
+    { id: 'shoulder_r_f', label: 'Ombro Dominante (D)' },
+    { id: 'knee_r_f', label: 'Joelho (D)' },
+    { id: 'knee_l_f', label: 'Joelho (E)' },
+    { id: 'lower_back', label: 'Lombar' },
+    { id: 'foot_r_f', label: 'Tornozelo (D)' }
+  ];
+
   const handleCopyCode = () => {
     if (athlete.athlete_code) {
       navigator.clipboard.writeText(athlete.athlete_code);
@@ -1876,22 +1894,47 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
             <CardContent className="p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                 <div className="flex flex-col items-center">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">Mapa de Dor Relatada</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">Mapa de Reabilitação & Risco</p>
                   <div className="w-full">
                     <PainMap 
-                      value={wellnessHistory.length > 0 && wellnessHistory[wellnessHistory.length - 1].soreness_location && wellnessHistory[wellnessHistory.length - 1].soreness_location !== 'Nenhuma' ? 
-                        (typeof wellnessHistory[wellnessHistory.length - 1].soreness_location === 'string' ? 
-                          { [wellnessHistory[wellnessHistory.length - 1].soreness_location]: { level: wellnessHistory[wellnessHistory.length - 1].pain || 5, type: 'muscle' } } : 
-                          wellnessHistory[wellnessHistory.length - 1].soreness_location
-                        ) : {}} 
+                      value={(() => {
+                        const baseValue = wellnessHistory.length > 0 && wellnessHistory[wellnessHistory.length - 1].soreness_location && wellnessHistory[wellnessHistory.length - 1].soreness_location !== 'Nenhuma' ? 
+                          (typeof wellnessHistory[wellnessHistory.length - 1].soreness_location === 'string' ? 
+                            { [wellnessHistory[wellnessHistory.length - 1].soreness_location]: { level: wellnessHistory[wellnessHistory.length - 1].pain || 5, type: 'muscle' } } : 
+                            wellnessHistory[wellnessHistory.length - 1].soreness_location
+                          ) : {};
+                        
+                        // Add phases to priority regions for visualization
+                        const enhancedValue = { ...baseValue };
+                        volleyballPriorityRegions.forEach(region => {
+                          if (!enhancedValue[region.id]) {
+                            enhancedValue[region.id] = { level: 0, type: 'prevention', phase: getRegionPhase(region.id) };
+                          } else {
+                            enhancedValue[region.id].phase = getRegionPhase(region.id);
+                          }
+                        });
+                        return enhancedValue;
+                      })()} 
                       readOnly={true} 
                       onPartClick={(part) => setSelectedClinicalRegion({ id: part.id, label: part.label })}
                       selectedPartId={selectedClinicalRegion?.id}
                     />
                   </div>
-                  <p className="mt-4 text-[8px] font-bold text-slate-600 uppercase tracking-widest animate-pulse">
-                    Clique em uma região para ver a evolução
-                  </p>
+                  
+                  {/* Legend */}
+                  <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-2">
+                    {[
+                      { label: 'Aguda', color: 'bg-rose-500' },
+                      { label: 'Subaguda', color: 'bg-amber-500' },
+                      { label: 'Funcional', color: 'bg-cyan-500' },
+                      { label: 'Retorno', color: 'bg-emerald-500' }
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 
                 <div className="space-y-6">
@@ -1912,6 +1955,39 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                       </div>
                     ) : (
                       <div className="space-y-4">
+                        {/* Priority Regions Card */}
+                        <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-xs font-black text-white uppercase tracking-tight">Regiões Prioritárias (Vôlei)</span>
+                            <span className="text-[10px] text-cyan-500 font-bold flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" /> Monitoramento Ativo
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {volleyballPriorityRegions.map(region => {
+                              const phase = getRegionPhase(region.id);
+                              const phaseColor = 
+                                phase === 'Aguda' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                                phase === 'Subaguda' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                phase === 'Funcional' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' :
+                                'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                              
+                              return (
+                                <button
+                                  key={region.id}
+                                  onClick={() => setSelectedClinicalRegion({ id: region.id, label: region.label })}
+                                  className="flex items-center justify-between p-2.5 bg-slate-900/50 rounded-lg border border-slate-800/50 hover:border-slate-700 transition-all group"
+                                >
+                                  <span className="text-[10px] font-bold text-slate-300 uppercase group-hover:text-white transition-colors">{region.label}</span>
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${phaseColor}`}>
+                                    {phase}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
                           <div className="flex justify-between items-center mb-4">
                             <span className="text-xs font-black text-white uppercase tracking-tight">Resumo Evolutivo</span>
