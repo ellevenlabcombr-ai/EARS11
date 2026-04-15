@@ -726,12 +726,12 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
   };
 
   return (
-    <div className="flex h-screen bg-[#050B14] overflow-hidden font-sans selection:bg-cyan-500/30">
+    <div className="flex h-dvh bg-[#050B14] overflow-hidden font-sans selection:bg-cyan-500/30">
       <SupabaseStatus />
       {/* Mobile Menu Button */}
       {/* Mobile Menu Toggle */}
       <button 
-        className="lg:hidden fixed top-[18px] left-4 z-[100] w-11 h-11 flex items-center justify-center bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20 backdrop-blur-md shadow-xl active:scale-95 transition-all"
+        className="lg:hidden fixed top-[calc(18px+env(safe-area-inset-top))] left-4 z-[100] w-11 h-11 flex items-center justify-center bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20 backdrop-blur-md shadow-xl active:scale-95 transition-all"
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       >
         {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -747,7 +747,7 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
 
       {/* Sidebar */}
       <aside 
-        className={`fixed lg:static inset-y-0 left-0 z-[90] w-[88px] bg-[#0A1120] border-r border-slate-800/50 flex flex-col transition-transform duration-300 lg:translate-x-0 ${!isDesktop && !isMobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}`}
+        className={`fixed lg:static inset-y-0 left-0 z-[90] w-[88px] bg-[#0A1120] border-r border-slate-800/50 flex flex-col pt-safe pb-safe transition-transform duration-300 lg:translate-x-0 ${!isDesktop && !isMobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}`}
       >
         {/* Logo */}
         <div className="h-20 flex items-center justify-center border-b border-slate-800/50 shrink-0">
@@ -847,7 +847,7 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
         'bg-[#050B14]'
       }`}>
         {/* Global Header */}
-        <header className={`sticky top-0 z-40 h-20 backdrop-blur-xl border-b border-slate-800/50 flex items-center justify-between px-5 lg:px-8 shrink-0 transition-colors duration-500 ${
+        <header className={`sticky top-0 z-40 h-[calc(80px+env(safe-area-inset-top))] pt-safe backdrop-blur-xl border-b border-slate-800/50 flex items-center justify-between px-5 lg:px-8 shrink-0 transition-colors duration-500 ${
           activeMode === 'clinical' ? 'bg-blue-950/20' :
           activeMode === 'eagles' ? 'bg-cyan-950/20' :
           'bg-[#0A1120]/80'

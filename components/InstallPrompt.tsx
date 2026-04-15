@@ -5,24 +5,22 @@ import { Download, X, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function InstallPrompt() {
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  });
+  const [isStandalone, setIsStandalone] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches || 
+           (window.navigator as any).standalone === true;
+  });
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
-    // Check if already installed
-    const isAppStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                            (window.navigator as any).standalone === true;
-    setIsStandalone(isAppStandalone);
-
-    // Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIOSDevice);
-
     // If not installed and is iOS, we might want to show a hint
-    if (isIOSDevice && !isAppStandalone) {
+    if (isIOS && !isStandalone) {
       // Only show after a short delay so it's not too aggressive
       const timer = setTimeout(() => setShowPrompt(true), 3000);
       return () => clearTimeout(timer);
@@ -40,7 +38,7 @@ export function InstallPrompt() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [isIOS, isStandalone]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {

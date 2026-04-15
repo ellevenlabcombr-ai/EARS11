@@ -50,6 +50,7 @@ import { supabase, hasSupabaseConfig, supabaseDebugInfo } from "@/lib/supabase";
 import { t, Language } from "@/lib/i18n";
 import { Athlete, WellnessRecord } from "@/types/database";
 import { parseDateString, getLocalDateString } from "@/lib/utils";
+import { PageContainer } from "./layout/AppLayout";
 import {
   LineChart,
   Line,
@@ -1018,84 +1019,86 @@ export function AthleteDashboard({
 
   if (view === "cycle_setup") {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md mx-auto space-y-8 pb-12"
-      >
-        <div className="flex justify-between items-center mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => setView("history")}
-            className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
-          >
-            <ChevronLeft className="w-5 h-5 mr-1" />
-            {t[lang].back}
-          </Button>
-        </div>
-
-        <div className="text-center space-y-4">
-          <div className="p-4 bg-rose-500/20 rounded-full w-20 h-20 mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
-            <CalendarDays className="w-10 h-10 text-rose-400" />
-          </div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-wider">
-            {lang === "pt" ? "Configurar Ciclo" : "Setup Cycle"}
-          </h2>
-          <p className="text-slate-400 font-medium">
-            {lang === "pt" 
-              ? "Informe os dados para automatizarmos seu acompanhamento."
-              : "Provide data to automate your tracking."}
-          </p>
-        </div>
-
-        <Card className="bg-[#0A1120] border-slate-800 shadow-2xl overflow-hidden">
-          <CardContent className="p-8 space-y-8">
-            <div className="space-y-4">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                {lang === "pt" ? "Data da Última Menstruação" : "Last Period Date"}
-              </label>
-              <input 
-                type="date"
-                value={setupLastPeriod}
-                onChange={(e) => setSetupLastPeriod(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-rose-500 transition-colors"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex justify-between">
-                <span>{lang === "pt" ? "Duração Média do Ciclo" : "Average Cycle Length"}</span>
-                <span className="text-rose-400">{setupCycleLength} dias</span>
-              </label>
-              <input 
-                type="range"
-                min="21"
-                max="45"
-                value={setupCycleLength}
-                onChange={(e) => setSetupCycleLength(parseInt(e.target.value))}
-                className="w-full accent-rose-500"
-              />
-              <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
-                <span>21 dias</span>
-                <span>28 dias (Média)</span>
-                <span>45 dias</span>
-              </div>
-            </div>
-
-            <Button 
-              onClick={handleSaveCycleSetup}
-              disabled={isSubmitting}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest py-8 rounded-2xl shadow-lg shadow-rose-500/20 transition-all hover:scale-[1.02] active:scale-95"
+      <PageContainer maxWidth="md" className="pt-safe">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="space-y-8 pb-12"
+        >
+          <div className="flex justify-between items-center mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => setView("history")}
+              className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
             >
-              {isSubmitting ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                lang === "pt" ? "Salvar e Continuar" : "Save and Continue"
-              )}
+              <ChevronLeft className="w-5 h-5 mr-1" />
+              {t[lang].back}
             </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
+          </div>
+
+          <div className="text-center space-y-4">
+            <div className="p-4 bg-rose-500/20 rounded-full w-20 h-20 mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
+              <CalendarDays className="w-10 h-10 text-rose-400" />
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-wider">
+              {lang === "pt" ? "Configurar Ciclo" : "Setup Cycle"}
+            </h2>
+            <p className="text-slate-400 font-medium">
+              {lang === "pt" 
+                ? "Informe os dados para automatizarmos seu acompanhamento."
+                : "Provide data to automate your tracking."}
+            </p>
+          </div>
+
+          <Card className="bg-[#0A1120] border-slate-800 shadow-2xl overflow-hidden">
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                  {lang === "pt" ? "Data da Última Menstruação" : "Last Period Date"}
+                </label>
+                <input 
+                  type="date"
+                  value={setupLastPeriod}
+                  onChange={(e) => setSetupLastPeriod(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex justify-between">
+                  <span>{lang === "pt" ? "Duração Média do Ciclo" : "Average Cycle Length"}</span>
+                  <span className="text-rose-400">{setupCycleLength} dias</span>
+                </label>
+                <input 
+                  type="range"
+                  min="21"
+                  max="45"
+                  value={setupCycleLength}
+                  onChange={(e) => setSetupCycleLength(parseInt(e.target.value))}
+                  className="w-full accent-rose-500"
+                />
+                <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
+                  <span>21 dias</span>
+                  <span>28 dias (Média)</span>
+                  <span>45 dias</span>
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleSaveCycleSetup}
+                disabled={isSubmitting}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest py-8 rounded-2xl shadow-lg shadow-rose-500/20 transition-all hover:scale-[1.02] active:scale-95"
+              >
+                {isSubmitting ? (
+                  <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  lang === "pt" ? "Salvar e Continuar" : "Save and Continue"
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </PageContainer>
     );
   }
 
@@ -1214,12 +1217,12 @@ export function AthleteDashboard({
     });
 
     return (
-      <>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto space-y-4 pb-12 pt-2"
-      >
+      <PageContainer maxWidth="3xl" className="pt-safe">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4 pb-12"
+        >
         {/* Top Bar: Title, Language & Gamification Stats */}
         <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 gap-3 w-full">
           <div className="flex items-center gap-2 w-full sm:w-auto pl-12 sm:pl-0">
@@ -1794,7 +1797,7 @@ export function AthleteDashboard({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-[#0A1120] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+              className="bg-[#0A1120] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col"
             >
               <div className="flex justify-between items-center p-6 border-b border-slate-800">
                 <div>
@@ -1967,7 +1970,7 @@ export function AthleteDashboard({
           </div>
         )}
       </AnimatePresence>
-    </>
+      </PageContainer>
     );
   }
 
@@ -1975,11 +1978,12 @@ export function AthleteDashboard({
     const tips = getTips();
 
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-3xl mx-auto space-y-8 pb-12"
-      >
+      <PageContainer maxWidth="3xl" className="pt-safe">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="space-y-8 pb-12"
+        >
         <div className="text-center space-y-4">
           <h2 className="text-3xl font-black text-white uppercase tracking-tight">
             {t[lang].yourDailyStatus}
@@ -2130,6 +2134,7 @@ export function AthleteDashboard({
           </Button>
         </div>
       </motion.div>
+      </PageContainer>
     );
   }
 
@@ -2209,11 +2214,12 @@ export function AthleteDashboard({
     const phaseInfo = getPhaseInfo(phaseKey);
 
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-3xl mx-auto space-y-8 pb-12"
-      >
+      <PageContainer maxWidth="3xl" className="pt-safe">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="space-y-8 pb-12"
+        >
         <div className="flex justify-between items-center mb-6">
           <Button
             variant="ghost"
@@ -2433,6 +2439,7 @@ export function AthleteDashboard({
           </div>
         </div>
       </motion.div>
+      </PageContainer>
     );
   }
 
@@ -2449,8 +2456,9 @@ export function AthleteDashboard({
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 pb-12">
-      <SupabaseStatus />
+    <PageContainer maxWidth="3xl" className="pt-safe">
+      <div className="space-y-8 pb-12">
+        <SupabaseStatus />
       <div className="flex justify-between items-center mb-6">
         <Button
           variant="ghost"
@@ -2837,6 +2845,7 @@ export function AthleteDashboard({
           {isSubmitting ? t[lang].syncing : t[lang].syncData}
         </Button>
       </motion.div>
-    </div>
+      </div>
+    </PageContainer>
   );
 }
