@@ -45,6 +45,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
+  Minus,
   CheckCircle2 as CheckCircle
 } from "lucide-react";
 import Image from "next/image";
@@ -124,6 +125,43 @@ const getPainLocationLabel = (id: string): string => {
     foot_r_b: "Calcanhar Direito",
   };
   return mapping[id.trim().toLowerCase()] || id.trim().replace(/_/g, " ");
+};
+
+const BODY_REGIONS = {
+  knee: { pt: "Joelho", en: "Knee" },
+  shoulder: { pt: "Ombro", en: "Shoulder" },
+  ankle: { pt: "Tornozelo", en: "Ankle" },
+  hip: { pt: "Quadril", en: "Hip" },
+  lumbar: { pt: "Lombar", en: "Lumbar" },
+};
+
+const SPORT_PROFILES: Record<string, any> = {
+  futebol: {
+    name: { pt: "Futebol", en: "Soccer" },
+    weights: { knee: 1.5, ankle: 1.4, hip: 1.2, lumbar: 1.1, shoulder: 0.8 }
+  },
+  volei: {
+    name: { pt: "Vôlei", en: "Volleyball" },
+    weights: { shoulder: 1.5, knee: 1.4, ankle: 1.3, lumbar: 1.2, hip: 1.0 }
+  },
+  basquete: {
+    name: { pt: "Basquete", en: "Basketball" },
+    weights: { knee: 1.5, ankle: 1.4, lumbar: 1.2, shoulder: 1.1, hip: 1.1 }
+  },
+  default: {
+    name: { pt: "Geral", en: "General" },
+    weights: { knee: 1.0, shoulder: 1.0, ankle: 1.0, hip: 1.0, lumbar: 1.0 }
+  }
+};
+
+const mapPartToRegion = (partId: string): string | null => {
+  const id = partId.toLowerCase();
+  if (id.includes('knee')) return 'knee';
+  if (id.includes('shoulder')) return 'shoulder';
+  if (id.includes('ankle')) return 'ankle';
+  if (id.includes('hip') || id.includes('pelvis') || id.includes('glutes')) return 'hip';
+  if (id.includes('lumbar') || id.includes('back')) return 'lumbar';
+  return null;
 };
 
 const getPainIntensityColor = (level: number): string => {
@@ -376,7 +414,7 @@ const motivationalQuotes = [
   },
 ];
 
-type ViewState = "history" | "questionnaire" | "summary" | "cycle" | "cycle_setup";
+type ViewState = "history" | "questionnaire" | "summary" | "cycle" | "cycle_setup" | "squad";
 
 interface AthleteDashboardProps {
   onBack: () => void;
@@ -414,7 +452,118 @@ export function AthleteDashboard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [quote, setQuote] = useState(motivationalQuotes[0]);
+  const [allAthletesData, setAllAthletesData] = useState<any[]>([]);
+  const [loadingSquad, setLoadingSquad] = useState(false);
+
+  const fetchSquadData = async () => {
+    if (!supabase) return;
+    setLoadingSquad(true);
+    try {
+      const { data: athletes } = await supabase.from("athletes").select("*");
+      if (athletes) {
+        const { data: wellness } = await supabase
+          .from("wellness_records")
+          .select("*")
+          .order("record_date", { ascending: false });
+        
+        const latestWellnessMap: Record<string, any> = {};
+        wellness?.forEach(w => {
+          if (!latestWellnessMap[w.athlete_id]) {
+            latestWellnessMap[w.athlete_id] = w;
+          }
+        });
+
+        const squad = athletes.map(a => ({
+          ...a,
+          latestWellness: latestWellnessMap[a.id] || null
+        }));
+        setAllAthletesData(squad);
+      }
+    } catch (err) {
+      console.error("Error fetching squad data:", err);
+    } finally {
+      setLoadingSquad(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === "squad") {
+      fetchSquadData();
+    }
+  }, [view]);
+
+  const SquadOverview = () => {
+    const sortedSquad = [...allAthletesData].sort((a, b) => {
+      const riskA = a.latestWellness?.readiness_score || 0;
+      const riskB = b.latestWellness?.readiness_score || 0;
+      return riskA - riskB; // Lower readiness = higher priority
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Squad Overview v5.0</h2>
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Central de Monitoramento de Risco</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => fetchSquadData()}
+            className="border-slate-800 text-slate-400 hover:bg-slate-800"
+          >
+            <RefreshCcw className={`w-4 h-4 mr-2 ${loadingSquad ? 'animate-spin' : ''}`} />
+            {lang === "pt" ? "Atualizar" : "Refresh"}
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedSquad.map((athlete) => {
+            const readiness = athlete.latestWellness?.readiness_score || 0;
+            const status = readiness > 75 ? 'emerald' : readiness > 50 ? 'amber' : 'rose';
+            
+            return (
+              <Card key={athlete.id} className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-all cursor-pointer overflow-hidden group">
+                <div className={`h-1 w-full ${status === 'emerald' ? 'bg-emerald-500' : status === 'amber' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-black">
+                      {athlete.name?.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">{athlete.name}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">{athlete.sport || 'Athlete'}</p>
+                    </div>
+                    <div className="ml-auto text-right">
+                      <p className="text-xs font-black text-white">{readiness}%</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase">Readiness</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-slate-800/50 rounded p-2 text-center">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Fadiga</p>
+                      <p className="text-xs font-black text-white">{athlete.latestWellness?.fatigue_level || '-'}</p>
+                    </div>
+                    <div className="flex-1 bg-slate-800/50 rounded p-2 text-center">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Sono</p>
+                      <p className="text-xs font-black text-white">{athlete.latestWellness?.sleep_quality || '-'}</p>
+                    </div>
+                    <div className="flex-1 bg-slate-800/50 rounded p-2 text-center">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">Dor</p>
+                      <p className={`text-xs font-black ${athlete.latestWellness?.muscle_soreness > 3 ? 'text-rose-400' : 'text-white'}`}>
+                        {athlete.latestWellness?.muscle_soreness || '-'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [latestPainMap, setLatestPainMap] = useState<Record<string, { level: number; type: string }>>({});
   const [athleteData, setAthleteData] = useState<Athlete | null>(null);
@@ -1125,6 +1274,41 @@ export function AthleteDashboard({
     );
   }
 
+    if (view === "squad") {
+      return (
+        <PageContainer maxWidth="3xl" className="pt-safe">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 pb-12"
+          >
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 gap-3 w-full">
+              <div className="flex items-center gap-2 w-full sm:w-auto pl-12 sm:pl-0">
+                <Button variant="ghost" size="icon" onClick={() => setView("history")} className="text-slate-400 hover:text-rose-400 mr-1 shrink-0">
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <h1 className="text-base sm:text-lg font-black text-white tracking-tight uppercase truncate">
+                  Squad <span className={theme.text}>Monitor</span>
+                </h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleLang}
+                  className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-xs h-8 px-2"
+                >
+                  <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" />
+                  {lang === "pt" ? "EN" : "PT"}
+                </Button>
+              </div>
+            </div>
+            <SquadOverview />
+          </motion.div>
+        </PageContainer>
+      );
+    }
+
     if (view === "history") {
     const streak = calculateStreak();
     const chartData = historyData
@@ -1457,6 +1641,326 @@ export function AthleteDashboard({
       };
     });
 
+    const DecisionEngineCard = () => {
+      const latest = historyData[0];
+      const previous = historyData[1];
+      const threeDaysAgo = historyData[2];
+      const [showAllExplanations, setShowAllExplanations] = useState(false);
+      
+      // 1. Healthy Baseline (v5.0) - Filter for "Golden Days"
+      const healthyDays = historyData.filter(r => r.readiness_score > 70 && r.muscle_soreness < 3).slice(0, 15);
+      const baselineReadiness = healthyDays.length > 0 
+        ? healthyDays.reduce((acc, r) => acc + r.readiness_score, 0) / healthyDays.length 
+        : historyData.slice(0, 30).reduce((acc, r) => acc + r.readiness_score, 0) / (historyData.length || 1);
+      
+      const baselineSleep = historyData.slice(0, 30).reduce((acc, r) => acc + r.sleep_quality, 0) / (historyData.length || 1);
+      const baselineFatigue = historyData.slice(0, 30).reduce((acc, r) => acc + r.fatigue_level, 0) / (historyData.length || 1);
+      
+      const readiness = latest?.readiness_score ?? 0;
+      const variation = previous ? readiness - previous.readiness_score : 0;
+      
+      // 2. Risk Projection (3-5 days) - v5.0
+      const recentTrend = variation + (previous && threeDaysAgo ? previous.readiness_score - threeDaysAgo.readiness_score : 0);
+      const projectedReadiness = Math.max(0, Math.min(100, readiness + (recentTrend / 2)));
+      
+      // 3. Advanced Confidence Score (Variability) - v5.0
+      const recentReadiness = historyData.slice(0, 14).map(r => r.readiness_score);
+      const mean = recentReadiness.reduce((a, b) => a + b, 0) / (recentReadiness.length || 1);
+      const variance = recentReadiness.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (recentReadiness.length || 1);
+      const stdDev = Math.sqrt(variance);
+      const confidence = Math.max(30, Math.min(100, 100 - (stdDev * 2) + (historyData.length * 2)));
+
+      // 4. Weighted Moving Average (WMA)
+      const wmaReadiness = latest && previous && threeDaysAgo 
+        ? Math.round((latest.readiness_score * 0.5) + (previous.readiness_score * 0.3) + (threeDaysAgo.readiness_score * 0.2))
+        : readiness;
+
+      // 5. Chronic Fatigue (7 days)
+      const chronicFatigue = historyData.slice(0, 7).reduce((acc, r) => acc + (r.fatigue_level || 0), 0) / Math.min(historyData.length, 7);
+      const isChronicOverload = chronicFatigue > (baselineFatigue * 1.25);
+
+      // 6. ACWR & Hidden Risk
+      const latestWorkload = workloadData[0];
+      const acwr = latestWorkload?.acwr || 1.0;
+      const hasHiddenRisk = (acwr > 1.3 || acwr < 0.7) && readiness > (baselineReadiness * 1.05);
+
+      // 7. Regional Risk Analysis
+      const sportKey = (athleteData?.sport?.toLowerCase() || 'default') as keyof typeof SPORT_PROFILES;
+      const sportProfile = SPORT_PROFILES[sportKey] || SPORT_PROFILES.default;
+      
+      const regionalRisks: Record<string, number> = {};
+      Object.keys(BODY_REGIONS).forEach(region => {
+        regionalRisks[region] = 0;
+      });
+
+      Object.entries(finalPainMap).forEach(([partId, data]: [string, any]) => {
+        const region = mapPartToRegion(partId);
+        if (region && regionalRisks[region] !== undefined) {
+          const weight = sportProfile.weights[region] || 1.0;
+          regionalRisks[region] = Math.max(regionalRisks[region], data.level * 10 * weight);
+        }
+      });
+
+      const criticalRegion = Object.entries(regionalRisks).reduce((a, b) => a[1] > b[1] ? a : b);
+      const maxRegionalRisk = criticalRegion[1];
+
+      // 8. Decision Explanation (v5.0 - Top 3)
+      const explanations: string[] = [];
+      if (latest?.sleep_quality < baselineSleep) explanations.push(lang === "pt" ? "Sono abaixo do baseline saudável" : "Sleep below healthy baseline");
+      if (latest?.fatigue_level > baselineFatigue) explanations.push(lang === "pt" ? "Fadiga acima da média histórica" : "Fatigue above historical average");
+      if (maxRegionalRisk > 30) explanations.push(lang === "pt" ? `Sobrecarga no ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].pt}` : `Overload in ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].en}`);
+      if (acwr > 1.4) explanations.push(lang === "pt" ? "ACWR em zona de perigo (>1.4)" : "ACWR in danger zone (>1.4)");
+      if (variation < -15) explanations.push(lang === "pt" ? "Queda brusca de prontidão" : "Sudden readiness drop");
+
+      const topExplanations = explanations.slice(0, 3);
+      const remainingCount = explanations.length - 3;
+
+      // 9. Clinical Pattern Detection
+      const patterns = [];
+      if (maxRegionalRisk > 50 && historyData.slice(0, 3).every(r => r.muscle_soreness > 3)) {
+        patterns.push({ id: 'tendon', label: lang === "pt" ? "Padrão Tendinopatia" : "Tendinopathy Pattern", severity: 'high' });
+      }
+      if (isChronicOverload && readiness < (baselineReadiness * 0.75)) {
+        patterns.push({ id: 'overtrain', label: lang === "pt" ? "Risco de Overtraining" : "Overtraining Risk", severity: 'critical' });
+      }
+      if (hasHiddenRisk) {
+        patterns.push({ id: 'hidden', label: lang === "pt" ? "Risco Oculto (ACWR)" : "Hidden Risk (ACWR)", severity: 'medium' });
+      }
+
+      // 10. Severity Score (v5.0)
+      let severity: 'low' | 'medium' | 'high' | 'critical' = 'low';
+      
+      // 11. Return to Play (RTP) Phase
+      let rtpPhase = 3; // Performance
+      if (maxRegionalRisk > 45) rtpPhase = 1; // Clinical
+      else if (readiness < (baselineReadiness * 0.85) || maxRegionalRisk > 15) rtpPhase = 2; // Functional
+
+      // 12. Global Risk Score v5.0 (Adaptive + Global Limits)
+      let riskScore = 0;
+      riskScore += maxRegionalRisk * 0.45;
+      riskScore += Math.max(0, (baselineSleep - (latest?.sleep_quality || baselineSleep))) * 18;
+      riskScore += Math.max(0, ((latest?.fatigue_level || 0) - baselineFatigue)) * 14;
+      riskScore += (latest?.stress_level || 0) * 6;
+      if (variation < -12) riskScore += 18;
+      if (isChronicOverload) riskScore += 12;
+      if (acwr > 1.5) riskScore += 25;
+
+      riskScore = Math.min(100, Math.round(riskScore));
+      
+      if (riskScore > 85) severity = 'critical';
+      else if (riskScore > 55) severity = 'high';
+      else if (riskScore > 30) severity = 'medium';
+
+      let decision = "normal";
+      if (wmaReadiness < (baselineReadiness * 0.55) || riskScore > 80 || maxRegionalRisk > 90) decision = "avoid";
+      else if (wmaReadiness <= (baselineReadiness * 0.8) || riskScore > 50 || maxRegionalRisk > 50) decision = "adjust";
+      
+      const getDecisionData = () => {
+        switch(decision) {
+          case 'avoid':
+            return {
+              title: lang === "pt" ? "Evitar Treino" : "Avoid Training",
+              color: "rose",
+              icon: AlertTriangle,
+              conduct: lang === "pt" 
+                ? `V5.0 CRÍTICO: Risco de evento clínico iminente. Projeção 3D: ${Math.round(projectedReadiness)}%.` 
+                : `V5.0 CRITICAL: Imminent clinical event risk. 3D Projection: ${Math.round(projectedReadiness)}%.`,
+              actions: lang === "pt" ? ["Fisioterapia", "Avaliação Médica", "Repouso"] : ["Physical Therapy", "Medical Assessment", "Rest"]
+            };
+          case 'adjust':
+            return {
+              title: lang === "pt" ? "Ajustar Carga" : "Adjust Load",
+              color: "amber",
+              icon: Zap,
+              conduct: lang === "pt"
+                ? `Ajuste v5.0: Desvio do baseline saudável detectado. Foco em ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].pt}.`
+                : `Adjust v5.0: Healthy baseline deviation detected. Focus on ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].en}.`,
+              actions: lang === "pt" ? ["Volume -50%", "Mobilidade", "Sem Impacto"] : ["Volume -50%", "Mobility", "No Impact"]
+            };
+          default:
+            return {
+              title: lang === "pt" ? "Treino Normal" : "Normal Training",
+              color: "emerald",
+              icon: CheckCircle2,
+              conduct: lang === "pt" ? "Alta Performance: Atleta em zona de evolução. Confiança: " + confidence + "%." : "High Performance: Athlete in evolution zone. Confidence: " + confidence + "%.",
+              actions: lang === "pt" ? ["Manter Carga", "Monitorar ACWR", "Nutrição"] : ["Maintain Load", "Monitor ACWR", "Nutrition"]
+            };
+        }
+      };
+      
+      const dData = getDecisionData();
+      
+      return (
+        <Card className={`relative overflow-hidden border-2 transition-all duration-500 ${
+          dData.color === 'rose' ? 'border-rose-500/50 bg-rose-500/5' : 
+          dData.color === 'amber' ? 'border-amber-500/50 bg-amber-500/5' : 'border-emerald-500/50 bg-emerald-500/5'
+        }`}>
+          <div className={`absolute -top-24 -right-24 w-64 h-64 rounded-full blur-[100px] opacity-20 ${
+            dData.color === 'rose' ? 'bg-rose-500' : dData.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'
+          }`} />
+
+          <CardContent className="p-6 relative z-10">
+            <div className="flex flex-col xl:flex-row gap-8">
+              {/* STATUS & PREDICTIVE METRICS */}
+              <div className="flex-1 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <Brain className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">EARS Engine v5.0 Predictive</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-black text-slate-500 uppercase">Confiança:</span>
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className={`w-2 h-1 rounded-full ${confidence >= (i * 20) ? 'bg-emerald-500' : 'bg-slate-800'}`} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">WMA vs Healthy</p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-3xl font-black text-white">{wmaReadiness}%</span>
+                      <span className="text-[10px] font-bold text-slate-500 mb-1">/ {Math.round(baselineReadiness)}%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Risco 3D</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-3xl font-black ${riskScore > 70 ? 'text-rose-500' : riskScore > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                        {riskScore}%
+                      </p>
+                      <div className={`flex items-center text-[10px] font-bold ${projectedReadiness < readiness ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {projectedReadiness < readiness ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                        {Math.round(projectedReadiness)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Severidade</p>
+                    <div className="flex items-center gap-2 h-9">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded ${
+                        severity === 'critical' ? 'bg-rose-600 text-white' : 
+                        severity === 'high' ? 'bg-rose-500/20 text-rose-400' : 
+                        severity === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+                      }`}>
+                        {severity.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* EXPLANATION LIST v5.0 */}
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fatores Determinantes</p>
+                  <div className="flex flex-col gap-1">
+                    {(showAllExplanations ? explanations : topExplanations).map((exp, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <div className="w-1 h-1 rounded-full bg-slate-600" />
+                        {exp}
+                      </div>
+                    ))}
+                    {remainingCount > 0 && !showAllExplanations && (
+                      <button 
+                        onClick={() => setShowAllExplanations(true)}
+                        className="text-[9px] font-bold text-rose-400 hover:text-rose-300 transition-colors text-left"
+                      >
+                        + {remainingCount} {lang === "pt" ? "outros fatores" : "other factors"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* DECISION & BENCHMARK */}
+              <div className="flex-1 flex flex-col justify-center border-y xl:border-y-0 xl:border-x border-slate-800/50 py-6 xl:py-0 xl:px-8">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Decisão Clínica</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase">Benchmark:</span>
+                      <span className="text-[9px] font-black text-emerald-400">Top 15%</span>
+                    </div>
+                  </div>
+                  <div className={`flex items-center gap-4 p-4 rounded-2xl ${
+                    dData.color === 'rose' ? 'bg-rose-500 text-white' : 
+                    dData.color === 'amber' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-white'
+                  } shadow-lg transition-all duration-500`}>
+                    <dData.icon className="w-8 h-8 shrink-0" />
+                    <span className="text-xl font-black uppercase tracking-tight">{dData.title}</span>
+                  </div>
+                  <p className="text-[9px] font-bold text-slate-500 text-center uppercase">
+                    Perfil: {sportProfile.name[lang]} • RTP: {rtpPhase === 1 ? 'CLINICAL' : rtpPhase === 2 ? 'FUNCTIONAL' : 'PERFORMANCE'}
+                  </p>
+                </div>
+              </div>
+
+              {/* CONDUCT & ACTIONS */}
+              <div className="flex-1 space-y-4">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conduta v5.0</p>
+                <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50">
+                  <p className="text-sm text-slate-300 leading-relaxed font-medium italic mb-3">
+                    &quot;{dData.conduct}&quot;
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {dData.actions.map((action, i) => (
+                      <span key={i} className="text-[9px] font-black bg-white/10 px-2 py-1 rounded uppercase tracking-tighter">
+                        • {action}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* REGIONAL RISK & TIMELINE */}
+            <div className="mt-6 pt-6 border-t border-slate-800/50 flex flex-col md:flex-row gap-6">
+              <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-4">
+                {Object.entries(BODY_REGIONS).map(([key, label]) => {
+                  const risk = regionalRisks[key];
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-black text-slate-500 uppercase">{label[lang]}</span>
+                        <span className={`text-[9px] font-black ${risk > 60 ? 'text-rose-400' : risk > 30 ? 'text-amber-400' : 'text-slate-600'}`}>
+                          {Math.round(risk)}%
+                        </span>
+                      </div>
+                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${risk}%` }}
+                          className={`h-full rounded-full ${risk > 60 ? 'bg-rose-500' : risk > 30 ? 'bg-amber-500' : 'bg-emerald-500/30'}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {patterns.length > 0 && (
+                <div className="md:w-64 space-y-2">
+                  <p className="text-[9px] font-black text-slate-500 uppercase">Eventos Clínicos</p>
+                  <div className="space-y-1">
+                    {patterns.map(p => (
+                      <div key={p.id} className="flex items-center gap-2 text-[10px] font-bold text-slate-300 bg-slate-800/50 px-2 py-1 rounded">
+                        <div className={`w-1.5 h-1.5 rounded-full ${p.severity === 'critical' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+                        {p.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    };
+
     return (
       <PageContainer maxWidth="3xl" className="pt-safe">
         <motion.div
@@ -1487,6 +1991,15 @@ export function AthleteDashboard({
                 {currentCoins}
               </span>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("squad")}
+              className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-xs h-8 px-2"
+            >
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" />
+              {lang === "pt" ? "Squad" : "Squad"}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1632,6 +2145,8 @@ export function AthleteDashboard({
             )}
           </>
         )}
+
+        <DecisionEngineCard />
 
         <WellnessWidget />
 
@@ -2988,7 +3503,7 @@ export function AthleteDashboard({
         >
           {isSubmitting ? t[lang].syncing : t[lang].syncData}
         </Button>
-      </motion.div>
+        </motion.div>
       </div>
     </PageContainer>
   );
