@@ -9,6 +9,22 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  Cell,
+  PieChart,
+  Pie,
+} from "recharts";
+import {
   Activity,
   Moon,
   Smile,
@@ -46,7 +62,22 @@ import {
   TrendingDown,
   AlertTriangle,
   Minus,
-  CheckCircle2 as CheckCircle
+  CheckCircle2 as CheckCircle,
+  CheckCircle as CheckCircleIcon,
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Settings,
+  ArrowRight,
+  Info,
+  MapPin,
+  MoreVertical,
+  Filter,
+  Search,
+  Download,
+  Share2,
+  Shield,
+  Stethoscope
 } from "lucide-react";
 import Image from "next/image";
 import { PainMap } from "@/components/PainMap";
@@ -56,15 +87,8 @@ import { t, Language } from "@/lib/i18n";
 import { Athlete, WellnessRecord } from "@/types/database";
 import { parseDateString, getLocalDateString } from "@/lib/utils";
 import { PageContainer } from "./layout/AppLayout";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { useAthleteStore } from "@/store/useAthleteStore";
+import { EARSEngineResult } from "@/lib/ears-engine";
 
 const getPainTypeLabel = (type: string, lang: "pt" | "en"): string => {
   if (!type) return "";
@@ -430,6 +454,14 @@ export function AthleteDashboard({
   athleteGender = "F"
 }: AthleteDashboardProps) {
   console.log("AthleteDashboard rendered with athleteId:", athleteId);
+  const { checkins, engineResult, loading: storeLoading, fetchCheckins: storeFetchCheckins } = useAthleteStore();
+
+  useEffect(() => {
+    if (athleteId) {
+      storeFetchCheckins(athleteId);
+    }
+  }, [athleteId, storeFetchCheckins]);
+
   const [lang, setLang] = useState<Language>("pt");
   const [view, setView] = useState<ViewState>("history");
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -564,14 +596,12 @@ export function AthleteDashboard({
       </div>
     );
   };
-  const [historyData, setHistoryData] = useState<any[]>([]);
   const [latestPainMap, setLatestPainMap] = useState<Record<string, { level: number; type: string }>>({});
   const [athleteData, setAthleteData] = useState<Athlete | null>(null);
   const [loadingAthlete, setLoadingAthlete] = useState(true);
   const [athleteCode, setAthleteCode] = useState<string | null>(null);
   const [xp, setXp] = useState(0);
   const [coins, setCoins] = useState(0);
-  const [loadingHistory, setLoadingHistory] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [respondedToday, setRespondedToday] = useState<boolean>(false);
   const [todaySummary, setTodaySummary] = useState<any>(null);
@@ -633,7 +663,6 @@ export function AthleteDashboard({
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
     
-    setLoadingHistory(true);
     setLoadingAthlete(true);
     
     try {
@@ -655,47 +684,9 @@ export function AthleteDashboard({
         setAthleteCode(athlete.athlete_code);
       }
 
-      // 2. Fetch wellness history
-      let historyResponse = await supabase
-        .from("wellness_records")
-        .select("*")
-        .eq("athlete_id", athleteId)
-        .order("record_date", { ascending: false })
-        .limit(15)
-        .abortSignal(controller.signal);
-
-      let finalHistoryData = [];
-
-      // Fallback if wellness_records fetch fails or is empty, try check_ins
-      if (historyResponse.error || (historyResponse.data && historyResponse.data.length === 0)) {
-        console.warn("wellness_records empty or error, trying check_ins");
-        const { data: checkInData, error: checkInError } = await supabase
-          .from("check_ins")
-          .select("*")
-          .eq("athlete_id", athleteId)
-          .order("created_at", { ascending: false })
-          .limit(15);
-        
-        if (checkInData) {
-          finalHistoryData = checkInData.map(d => ({
-            ...d,
-            record_date: d.record_date || d.date || d.created_at.split('T')[0],
-            sleep_quality: d.sleep_quality,
-            fatigue_level: d.energy_level,
-            muscle_soreness: d.muscle_soreness,
-            stress_level: d.stress_level,
-            readiness_score: d.readiness_score
-          }));
-        }
-      } else if (historyResponse.data) {
-        finalHistoryData = historyResponse.data;
-      }
-
-      setHistoryData(finalHistoryData);
-      
-      // Check if responded today
+      // 2. Check if responded today
       const today = getLocalDateString();
-      const todayRecord = finalHistoryData.find(r => r.record_date === today);
+      const todayRecord = checkins.find(r => r.record_date === today);
       if (todayRecord) {
         setRespondedToday(true);
         setTodaySummary(todayRecord);
@@ -717,8 +708,8 @@ export function AthleteDashboard({
       }
 
       // 4. Fetch latest pain map (from the most recent record)
-      if (finalHistoryData.length > 0) {
-        const latestId = finalHistoryData[0].id;
+      if (checkins.length > 0) {
+        const latestId = checkins[0].id;
         const { data: painData, error: painError } = await supabase
           .from("pain_reports")
           .select("body_part_id, pain_level, pain_type")
@@ -737,14 +728,10 @@ export function AthleteDashboard({
       clearTimeout(timeoutId);
     } catch (err: any) {
       console.error("Failed to fetch data in AthleteDashboard:", err);
-      if (err.name === 'AbortError') {
-        console.error("Fetch timed out after 30 seconds");
-      }
     } finally {
-      setLoadingHistory(false);
       setLoadingAthlete(false);
     }
-  }, [athleteId]);
+  }, [athleteId, checkins]);
 
   useEffect(() => {
     fetchData();
@@ -922,7 +909,7 @@ export function AthleteDashboard({
   const readiness = calculateReadiness();
 
   const calculateStreak = () => {
-    if (!historyData || historyData.length === 0) return 0;
+    if (!checkins || checkins.length === 0) return 0;
 
     let streak = 0;
     const today = new Date();
@@ -930,7 +917,7 @@ export function AthleteDashboard({
 
     let currentDate = new Date(today);
 
-    const hasToday = historyData.some((record) => {
+    const hasToday = checkins.some((record) => {
       const recordDate = parseDateString(record.record_date || record.created_at);
       recordDate.setHours(0, 0, 0, 0);
       return recordDate.getTime() === today.getTime();
@@ -941,7 +928,7 @@ export function AthleteDashboard({
     }
 
     for (let i = 0; i < 30; i++) {
-      const found = historyData.some((record) => {
+      const found = checkins.some((record) => {
         const recordDate = parseDateString(record.record_date || record.created_at);
         recordDate.setHours(0, 0, 0, 0);
         return recordDate.getTime() === currentDate.getTime();
@@ -1144,6 +1131,7 @@ export function AthleteDashboard({
 
       // Refresh history data
       console.log("Refreshing history data after submit...");
+      await storeFetchCheckins(athleteId);
       await fetchData();
     } catch (error: any) {
       console.error("Error saving to Supabase:", error);
@@ -1310,9 +1298,121 @@ export function AthleteDashboard({
     }
 
     if (view === "history") {
+    const DecisionEngineCard = () => {
+      if (!engineResult) return null;
+
+      const { readiness, risk, recovery, status, decision, recommendation, alerts, trend } = engineResult;
+
+      const statusColors = {
+        low: "border-emerald-500/30 bg-emerald-500/5",
+        moderate: "border-amber-500/30 bg-amber-500/5",
+        high: "border-rose-500/30 bg-rose-500/5",
+      };
+
+      const decisionColors = {
+        normal: "bg-emerald-500 text-white",
+        adjust: "bg-amber-500 text-black",
+        avoid: "bg-rose-500 text-white",
+      };
+
+      const decisionLabels = {
+        normal: lang === "pt" ? "TREINO NORMAL" : "NORMAL TRAINING",
+        adjust: lang === "pt" ? "AJUSTAR CARGA" : "ADJUST LOAD",
+        avoid: lang === "pt" ? "EVITAR TREINO" : "AVOID TRAINING",
+      };
+
+      return (
+        <Card className={`overflow-hidden border-2 shadow-2xl ${statusColors[status]} transition-all duration-500`}>
+          <CardHeader className="pb-2 border-b border-white/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-indigo-400" />
+                <CardTitle className="text-lg font-black text-white uppercase tracking-tighter">
+                  EARS Decision Engine <span className="text-[10px] text-slate-500 font-mono">v5.0</span>
+                </CardTitle>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${decisionColors[decision]}`}>
+                {decisionLabels[decision]}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-6">
+            {/* Main Scores */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center space-y-1">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Prontidão</p>
+                <p className={`text-2xl font-black ${readiness > 75 ? 'text-emerald-400' : readiness > 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {readiness}%
+                </p>
+              </div>
+              <div className="text-center space-y-1 border-x border-white/5">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Risco</p>
+                <p className={`text-2xl font-black ${risk < 30 ? 'text-emerald-400' : risk < 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {risk}%
+                </p>
+              </div>
+              <div className="text-center space-y-1">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recovery</p>
+                <p className="text-2xl font-black text-indigo-400">{recovery}%</p>
+              </div>
+            </div>
+
+            {/* Recommendation */}
+            <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-lg ${decisionColors[decision]} bg-opacity-20`}>
+                  <Target className={`w-5 h-5 ${decision === 'adjust' ? 'text-amber-400' : decision === 'avoid' ? 'text-rose-400' : 'text-emerald-400'}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Conduta Recomendada</p>
+                  <p className="text-sm text-white font-medium leading-relaxed italic">
+                    &quot;{recommendation}&quot;
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Alerts & Trend */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 space-y-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <AlertTriangle className="w-3 h-3" /> Alertas Ativos
+                </p>
+                <div className="space-y-2">
+                  {alerts.length > 0 ? (
+                    alerts.map((alert, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">
+                        <div className="w-1 h-1 rounded-full bg-rose-500" />
+                        {alert}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                      Nenhum alerta crítico detectado.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="sm:w-32 space-y-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tendência</p>
+                <div className={`flex items-center justify-center gap-2 p-3 rounded-xl border ${
+                  trend === 'melhora' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                  trend === 'queda' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+                  'bg-slate-800 border-slate-700 text-slate-400'
+                }`}>
+                  {trend === 'melhora' ? <TrendingUp className="w-4 h-4" /> : trend === 'queda' ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                  <span className="text-[10px] font-black uppercase">{trend}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    };
+
     const streak = calculateStreak();
-    const chartData = historyData
-      .slice()
+    const chartData = checkins
+      .slice(0, 15)
       .reverse()
       .map((record) => ({
         date: parseDateString(record.record_date || record.created_at).toLocaleDateString(
@@ -1325,15 +1425,15 @@ export function AthleteDashboard({
         stress: (record.stress_level || 0) * 20,
       }));
 
-    const painChartData = historyData
-      .slice()
+    const painChartData = checkins
+      .slice(0, 15)
       .reverse()
       .map((record) => ({
         date: parseDateString(record.record_date || record.created_at).toLocaleDateString(
           lang === "pt" ? "pt-BR" : "en-US",
           { day: "2-digit", month: "2-digit" },
         ),
-        level: record.pain_level || 0,
+        level: record.muscle_soreness || 0,
       }));
 
     const workloadChartData = workloadData
@@ -1345,7 +1445,7 @@ export function AthleteDashboard({
           { day: "2-digit", month: "2-digit" },
         ),
         load: r.score,
-        readiness: historyData.find(h => h.record_date === r.assessment_date.split('T')[0])?.readiness_score || 50
+        readiness: checkins.find(h => h.record_date === r.assessment_date.split('T')[0])?.readiness_score || 50
       }));
 
     const WellnessWidget = () => {
@@ -1432,9 +1532,9 @@ export function AthleteDashboard({
     const ClinicalInsights = () => {
       const insights = [];
       
-      if (historyData.length >= 2) {
-        const latest = historyData[0];
-        const previous = historyData[1];
+      if (checkins.length >= 2) {
+        const latest = checkins[0];
+        const previous = checkins[1];
         
         if (latest.readiness_score < previous.readiness_score - 15) {
           insights.push({
@@ -1492,7 +1592,7 @@ export function AthleteDashboard({
 
     const RecoveryChecklist = () => {
       const tasks = [];
-      const latest = historyData[0];
+      const latest = checkins[0];
       
       if (latest) {
         if (latest.sleep_quality <= 2) {
@@ -1501,7 +1601,7 @@ export function AthleteDashboard({
         if (latest.fatigue_level >= 4) {
           tasks.push({ id: 'recovery', title: "Sessão de Recovery (Botas/Gelo)", icon: RefreshCcw });
         }
-        const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
+        const maxPain = latest.muscle_soreness || 0;
         if (maxPain >= 4) {
           tasks.push({ id: 'physio', title: "Avaliação com Fisioterapia", icon: Activity });
         }
@@ -1541,7 +1641,7 @@ export function AthleteDashboard({
     };
 
     // Gamification & Insights Logic
-    const latestCheckIn = historyData[0];
+    const latestCheckIn = checkins[0];
     const hasCheckedInToday =
       latestCheckIn &&
       parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toDateString() ===
@@ -1629,7 +1729,7 @@ export function AthleteDashboard({
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
       const dateStr = d.toDateString();
-      const hasRecord = historyData.some(
+      const hasRecord = checkins.some(
         (record) => parseDateString(record.record_date || record.created_at).toDateString() === dateStr,
       );
       return {
@@ -1641,34 +1741,25 @@ export function AthleteDashboard({
       };
     });
 
-    const DecisionEngineCard = () => {
-      const latest = historyData[0];
-      const previous = historyData[1];
-      const threeDaysAgo = historyData[2];
-      const [showAllExplanations, setShowAllExplanations] = useState(false);
+    const ClinicalInsights = () => {
+      const baselineReadiness = 0;
       
-      // 1. Healthy Baseline (v5.0) - Filter for "Golden Days"
-      const healthyDays = historyData.filter(r => r.readiness_score > 70 && r.muscle_soreness < 3).slice(0, 15);
-      const baselineReadiness = healthyDays.length > 0 
-        ? healthyDays.reduce((acc, r) => acc + r.readiness_score, 0) / healthyDays.length 
-        : historyData.slice(0, 30).reduce((acc, r) => acc + r.readiness_score, 0) / (historyData.length || 1);
+      const baselineSleep = 0;
+      const baselineFatigue = 0;
       
-      const baselineSleep = historyData.slice(0, 30).reduce((acc, r) => acc + r.sleep_quality, 0) / (historyData.length || 1);
-      const baselineFatigue = historyData.slice(0, 30).reduce((acc, r) => acc + r.fatigue_level, 0) / (historyData.length || 1);
-      
-      const readiness = latest?.readiness_score ?? 0;
-      const variation = previous ? readiness - previous.readiness_score : 0;
+      const readiness = 0;
+      const variation = 0;
       
       // 2. Risk Projection (3-5 days) - v5.0
       const recentTrend = variation + (previous && threeDaysAgo ? previous.readiness_score - threeDaysAgo.readiness_score : 0);
       const projectedReadiness = Math.max(0, Math.min(100, readiness + (recentTrend / 2)));
       
       // 3. Advanced Confidence Score (Variability) - v5.0
-      const recentReadiness = historyData.slice(0, 14).map(r => r.readiness_score);
+      const recentReadiness = checkins.slice(0, 14).map(r => r.readiness_score);
       const mean = recentReadiness.reduce((a, b) => a + b, 0) / (recentReadiness.length || 1);
       const variance = recentReadiness.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (recentReadiness.length || 1);
       const stdDev = Math.sqrt(variance);
-      const confidence = Math.max(30, Math.min(100, 100 - (stdDev * 2) + (historyData.length * 2)));
+      const confidence = Math.max(30, Math.min(100, 100 - (stdDev * 2) + (checkins.length * 2)));
 
       // 4. Weighted Moving Average (WMA)
       const wmaReadiness = latest && previous && threeDaysAgo 
@@ -1676,7 +1767,7 @@ export function AthleteDashboard({
         : readiness;
 
       // 5. Chronic Fatigue (7 days)
-      const chronicFatigue = historyData.slice(0, 7).reduce((acc, r) => acc + (r.fatigue_level || 0), 0) / Math.min(historyData.length, 7);
+      const chronicFatigue = checkins.slice(0, 7).reduce((acc, r) => acc + (r.fatigue_level || 0), 0) / Math.min(checkins.length, 7);
       const isChronicOverload = chronicFatigue > (baselineFatigue * 1.25);
 
       // 6. ACWR & Hidden Risk
@@ -1717,7 +1808,7 @@ export function AthleteDashboard({
 
       // 9. Clinical Pattern Detection
       const patterns = [];
-      if (maxRegionalRisk > 50 && historyData.slice(0, 3).every(r => r.muscle_soreness > 3)) {
+      if (maxRegionalRisk > 50 && checkins.slice(0, 3).every(r => r.muscle_soreness > 3)) {
         patterns.push({ id: 'tendon', label: lang === "pt" ? "Padrão Tendinopatia" : "Tendinopathy Pattern", severity: 'high' });
       }
       if (isChronicOverload && readiness < (baselineReadiness * 0.75)) {
@@ -1887,11 +1978,17 @@ export function AthleteDashboard({
                     </div>
                   </div>
                   <div className={`flex items-center gap-4 p-4 rounded-2xl ${
-                    dData.color === 'rose' ? 'bg-rose-500 text-white' : 
-                    dData.color === 'amber' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-white'
+                    engineResult?.decision === 'avoid' ? 'bg-rose-500 text-white' : 
+                    engineResult?.decision === 'adjust' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-white'
                   } shadow-lg transition-all duration-500`}>
-                    <dData.icon className="w-8 h-8 shrink-0" />
-                    <span className="text-xl font-black uppercase tracking-tight">{dData.title}</span>
+                    {engineResult?.decision === 'avoid' ? <AlertCircle className="w-8 h-8 shrink-0" /> : 
+                     engineResult?.decision === 'adjust' ? <RefreshCcw className="w-8 h-8 shrink-0" /> : 
+                     <CheckCircle className="w-8 h-8 shrink-0" />}
+                    <span className="text-xl font-black uppercase tracking-tight">
+                      {engineResult?.decision === 'avoid' ? (lang === "pt" ? "Evitar Treino" : "Avoid Training") :
+                       engineResult?.decision === 'adjust' ? (lang === "pt" ? "Ajustar Carga" : "Adjust Load") :
+                       (lang === "pt" ? "Treino Normal" : "Normal Training")}
+                    </span>
                   </div>
                   <p className="text-[9px] font-bold text-slate-500 text-center uppercase">
                     Perfil: {sportProfile.name[lang]} • RTP: {rtpPhase === 1 ? 'CLINICAL' : rtpPhase === 2 ? 'FUNCTIONAL' : 'PERFORMANCE'}
@@ -1904,12 +2001,12 @@ export function AthleteDashboard({
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conduta v5.0</p>
                 <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50">
                   <p className="text-sm text-slate-300 leading-relaxed font-medium italic mb-3">
-                    &quot;{dData.conduct}&quot;
+                    &quot;{engineResult?.recommendation || "Aguardando dados..."}&quot;
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {dData.actions.map((action, i) => (
+                    {engineResult?.alerts.map((alert, i) => (
                       <span key={i} className="text-[9px] font-black bg-white/10 px-2 py-1 rounded uppercase tracking-tighter">
-                        • {action}
+                        • {alert}
                       </span>
                     ))}
                   </div>
@@ -2367,11 +2464,11 @@ export function AthleteDashboard({
             </h3>
           </div>
 
-          {loadingHistory ? (
+          {storeLoading ? (
             <div className="flex justify-center py-12">
               <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${athleteGender === 'M' ? 'border-indigo-500' : 'border-rose-500'}`}></div>
             </div>
-          ) : historyData.length === 0 ? (
+          ) : checkins.length === 0 ? (
             <div className="text-center py-12 bg-slate-900/30 rounded-2xl border border-slate-800/50">
               <p className="text-slate-400 font-medium">{t[lang].noRecords}</p>
               <p className="text-sm text-slate-500 mt-1">
@@ -2381,7 +2478,7 @@ export function AthleteDashboard({
           ) : (
             <div className="space-y-6">
               <div className="grid gap-4">
-                {historyData.map((record) => {
+                {checkins.map((record) => {
                   const date = parseDateString(record.record_date || record.created_at);
                   const isGood = record.readiness_score >= 75;
                   const isWarning =
