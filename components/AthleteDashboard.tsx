@@ -1726,14 +1726,58 @@ export function AthleteDashboard({
       };
     });
 
-    const ClinicalInsights = () => {
-      const baselineReadiness = 0;
-      
-      const baselineSleep = 0;
-      const baselineFatigue = 0;
-      
-      const readiness = 0;
-      const variation = 0;
+  const ClinicalInsights = () => {
+  if (!checkins || checkins.length === 0) return null;
+
+  const latest = checkins[0];
+  const previous = checkins[1];
+
+  const readiness = latest?.readiness_score ?? 0;
+
+  const variation = previous
+    ? readiness - previous.readiness_score
+    : 0;
+
+  const getBaseline = (data: any[], field: string) => {
+    const valid = data.slice(0, 7).map(d => d[field]).filter(Boolean);
+    if (valid.length === 0) return 0;
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  };
+
+  const baselineReadiness = getBaseline(checkins, 'readiness_score');
+  const baselineSleep = getBaseline(checkins, 'sleep_hours');
+  const baselineFatigue = getBaseline(checkins, 'fatigue');
+
+  const readinessDeviation = readiness - baselineReadiness;
+  const sleepDeviation = (latest?.sleep_hours ?? 0) - baselineSleep;
+  const fatigueDeviation = (latest?.fatigue ?? 0) - baselineFatigue;
+
+  const insights = [];
+
+  if (variation < -10) {
+    insights.push({ type: "warning", message: "Queda aguda de prontidão" });
+  }
+
+  if (readinessDeviation < -15) {
+    insights.push({ type: "critical", message: "Prontidão abaixo do padrão" });
+  }
+
+  if (sleepDeviation < -2) {
+    insights.push({ type: "warning", message: "Sono abaixo do ideal" });
+  }
+
+  if (fatigueDeviation > 1) {
+    insights.push({ type: "warning", message: "Fadiga elevada" });
+  }
+
+  return (
+    <div>
+      {insights.map((i, index) => (
+        <div key={index}>{i.message}</div>
+      ))}
+    </div>
+  );
+};
       
       // 2. Risk Projection (3-5 days) - v5.0
       const recentTrend = variation + (previous && threeDaysAgo ? previous.readiness_score - threeDaysAgo.readiness_score : 0);
