@@ -1529,52 +1529,6 @@ export function AthleteDashboard({
       );
     };
 
-            
-        const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
-        if (maxPain > 6) {
-          insights.push({
-            type: "critical",
-            title: lang === "pt" ? "Alerta de Dor" : "Pain Alert",
-            message: lang === "pt" ? "Nível de dor crítico detectado. Informe seu fisioterapeuta imediatamente." : "Critical pain level detected. Inform your physical therapist immediately.",
-            icon: AlertTriangle
-          });
-        }
-      }
-
-      if (insights.length === 0) return null;
-
-      return (
-        <div className="space-y-4">
-          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
-            <Lightbulb className="w-4 h-4" />
-            Insights Clínicos
-          </h3>
-          <div className="grid gap-4">
-            {insights.map((insight, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`p-4 rounded-2xl border ${
-                  insight.type === 'critical' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'
-                } flex gap-4`}
-              >
-                <div className={`p-2 rounded-lg h-fit ${
-                  insight.type === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
-                }`}>
-                  <insight.icon className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-black text-white uppercase tracking-tight">{insight.title}</p>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{insight.message}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      );
-    };
-
     const RecoveryChecklist = () => {
       const tasks = [];
       const latest = checkins[0];
