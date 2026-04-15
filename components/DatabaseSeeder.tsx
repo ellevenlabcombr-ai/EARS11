@@ -240,6 +240,31 @@ BEGIN
         DROP POLICY IF EXISTS "Permitir tudo para todos" ON daily_tasks;
         CREATE POLICY "Permitir tudo para todos" ON daily_tasks FOR ALL USING (true) WITH CHECK (true);
     END IF;
+
+    -- Tabela EARS Smart Agenda
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='agenda_events') THEN
+        CREATE TABLE agenda_events (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            title TEXT NOT NULL,
+            description TEXT,
+            start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+            end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+            category TEXT NOT NULL, -- clinical | professional | personal
+            subcategory TEXT,
+            athlete_id UUID REFERENCES athletes(id) ON DELETE SET NULL,
+            risk_score NUMERIC,
+            priority NUMERIC NOT NULL,
+            origin TEXT DEFAULT 'manual',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        -- Habilitar RLS
+        ALTER TABLE agenda_events ENABLE ROW LEVEL SECURITY;
+
+        -- Criar políticas de acesso (Público para simplificar)
+        DROP POLICY IF EXISTS "Permitir tudo para todos" ON agenda_events;
+        CREATE POLICY "Permitir tudo para todos" ON agenda_events FOR ALL USING (true) WITH CHECK (true);
+    END IF;
 END $$;
 
 -- 2.2. Criar tabela de check_ins se não existir

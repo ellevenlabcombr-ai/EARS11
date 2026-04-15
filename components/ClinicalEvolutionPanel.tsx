@@ -36,6 +36,7 @@ type RehabPhase = "Aguda" | "Subaguda" | "Funcional" | "Retorno ao Esporte";
 interface ClinicalEvolutionPanelProps {
   regionName: string;
   data: EvolutionData[];
+  riskScore?: number;
   lang?: "pt" | "en";
 }
 
@@ -87,7 +88,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function ClinicalEvolutionPanel({ regionName, data, lang = "pt" }: ClinicalEvolutionPanelProps) {
+export function ClinicalEvolutionPanel({ regionName, data, riskScore, lang = "pt" }: ClinicalEvolutionPanelProps) {
   // Calculate variations
   const first = data[0];
   const last = data[data.length - 1];
@@ -96,6 +97,13 @@ export function ClinicalEvolutionPanel({ regionName, data, lang = "pt" }: Clinic
   const deltaPain = last.pain - first.pain;
   const deltaStrength = last.strength - first.strength;
   const deltaRom = last.rom - first.rom;
+
+  const riskColor = 
+    riskScore !== undefined ? (
+      riskScore >= 70 ? 'text-rose-500' :
+      riskScore >= 40 ? 'text-amber-500' :
+      'text-emerald-500'
+    ) : 'text-slate-500';
 
   const getTrendIcon = (delta: number, inverse = false) => {
     const isGood = inverse ? delta < 0 : delta > 0;
@@ -133,6 +141,13 @@ export function ClinicalEvolutionPanel({ regionName, data, lang = "pt" }: Clinic
             </div>
           </div>
         </div>
+        
+        {riskScore !== undefined && (
+          <div className="text-right">
+            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Score de Risco</p>
+            <p className={`text-lg font-black ${riskColor}`}>{riskScore}%</p>
+          </div>
+        )}
       </div>
 
       {/* Next Step Card */}

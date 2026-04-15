@@ -45,7 +45,7 @@ import PhysicalAssessment from "./PhysicalAssessment";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { getLocalDateString } from "@/lib/utils";
 import { DatabaseSeeder } from "./DatabaseSeeder";
-import { AgendaDashboard } from "./AgendaDashboard";
+import { SmartAgenda } from "./SmartAgenda";
 import { PendenciesDashboard } from "./PendenciesDashboard";
 import { ClinicalDashboard } from "./dashboard/ClinicalDashboard";
 import { DailyOperationsDashboard } from "./dashboard/DailyOperationsDashboard";
@@ -365,10 +365,7 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
           handleNavigation('athlete-profile');
         }} />;
       case 'agenda':
-        return <AgendaDashboard onOpenProfile={(athlete) => {
-          setEditingAthlete(athlete);
-          handleNavigation('athlete-profile');
-        }} />;
+        return <SmartAgenda />;
       case 'athletes':
         return (
           <AthleteList 

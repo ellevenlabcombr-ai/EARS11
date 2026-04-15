@@ -70,6 +70,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PainMap } from "./PainMap";
 import { ClinicalEvolutionPanel } from "./ClinicalEvolutionPanel";
 import { SleepAssessment } from "./SleepAssessment";
+import { SPORT_PROFILES, SportType, SportProfile } from "@/lib/sportProfiles";
 import { OrthopedicAssessment } from "./OrthopedicAssessment";
 import BiomechanicalAssessment from "./BiomechanicalAssessment";
 import PhysicalAssessment from "./PhysicalAssessment";
@@ -554,6 +555,24 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
   const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
   const [selectedClinicalRegion, setSelectedClinicalRegion] = useState<{id: string, label: string} | null>(null);
 
+  const athleteSport = (athlete.sport as SportType) || 'Vôlei';
+  const sportProfile = SPORT_PROFILES[athleteSport] || SPORT_PROFILES['Vôlei'];
+
+  const calculateRiskScore = (regionId: string) => {
+    const data = generateRegionEvolution(regionId);
+    const last = data[data.length - 1];
+    const priorityRegion = sportProfile.priorityRegions.find(r => r.id === regionId);
+    const loadLevel = priorityRegion?.loadLevel || 1;
+
+    // Risk factors: High pain, low strength, high sport load
+    const painFactor = last.pain * 10; // 0-100
+    const strengthFactor = 100 - last.strength; // 0-100
+    const loadFactor = loadLevel * 33.3; // 33, 66, 100
+
+    const score = (painFactor * 0.4) + (strengthFactor * 0.4) + (loadFactor * 0.2);
+    return Math.round(score);
+  };
+
   const generateRegionEvolution = (regionId: string) => {
     const days = 7;
     const data = [];
@@ -600,13 +619,7 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
     return "Retorno ao Esporte";
   };
 
-  const volleyballPriorityRegions = [
-    { id: 'shoulder_r_f', label: 'Ombro Dominante (D)' },
-    { id: 'knee_r_f', label: 'Joelho (D)' },
-    { id: 'knee_l_f', label: 'Joelho (E)' },
-    { id: 'lower_back', label: 'Lombar' },
-    { id: 'foot_r_f', label: 'Tornozelo (D)' }
-  ];
+  const volleyballPriorityRegions = sportProfile.priorityRegions;
 
   const handleCopyCode = () => {
     if (athlete.athlete_code) {
@@ -1906,7 +1919,7 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                         
                         // Add phases to priority regions for visualization
                         const enhancedValue = { ...baseValue };
-                        volleyballPriorityRegions.forEach(region => {
+                        sportProfile.priorityRegions.forEach(region => {
                           if (!enhancedValue[region.id]) {
                             enhancedValue[region.id] = { level: 0, type: 'prevention', phase: getRegionPhase(region.id) };
                           } else {
@@ -1951,6 +1964,7 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                           key={selectedClinicalRegion.id}
                           regionName={selectedClinicalRegion.label}
                           data={generateRegionEvolution(selectedClinicalRegion.id)}
+                          riskScore={calculateRiskScore(selectedClinicalRegion.id)}
                         />
                       </div>
                     ) : (
@@ -1958,7 +1972,7 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                         {/* Priority Regions Card */}
                         <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
                           <div className="flex justify-between items-center mb-4">
-                            <span className="text-xs font-black text-white uppercase tracking-tight">Regiões Prioritárias (Vôlei)</span>
+                            <span className="text-xs font-black text-white uppercase tracking-tight">Regiões Prioritárias ({athleteSport})</span>
                             <span className="text-[10px] text-cyan-500 font-bold flex items-center gap-1">
                               <ShieldCheck className="w-3 h-3" /> Monitoramento Ativo
                             </span>
@@ -1966,19 +1980,32 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
                           <div className="grid grid-cols-1 gap-2">
                             {volleyballPriorityRegions.map(region => {
                               const phase = getRegionPhase(region.id);
+                              const riskScore = calculateRiskScore(region.id);
+                              
                               const phaseColor = 
                                 phase === 'Aguda' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
                                 phase === 'Subaguda' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
                                 phase === 'Funcional' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' :
                                 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
                               
+                              const riskColor = 
+                                riskScore >= 70 ? 'text-rose-500' :
+                                riskScore >= 40 ? 'text-amber-500' :
+                                'text-emerald-500';
+
                               return (
                                 <button
                                   key={region.id}
                                   onClick={() => setSelectedClinicalRegion({ id: region.id, label: region.label })}
                                   className="flex items-center justify-between p-2.5 bg-slate-900/50 rounded-lg border border-slate-800/50 hover:border-slate-700 transition-all group"
                                 >
-                                  <span className="text-[10px] font-bold text-slate-300 uppercase group-hover:text-white transition-colors">{region.label}</span>
+                                  <div className="flex flex-col items-start">
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase group-hover:text-white transition-colors">{region.label}</span>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">Risco:</span>
+                                      <span className={`text-[8px] font-black uppercase ${riskColor}`}>{riskScore}%</span>
+                                    </div>
+                                  </div>
                                   <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${phaseColor}`}>
                                     {phase}
                                   </span>
