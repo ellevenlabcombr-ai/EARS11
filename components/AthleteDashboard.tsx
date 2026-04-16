@@ -1529,6 +1529,67 @@ export function AthleteDashboard({
       );
     };
 
+    const ClinicalInsights = () => {
+      const insights = [];
+      
+      if (checkins.length >= 2) {
+        const latest = checkins[0];
+        const previous = checkins[1];
+        
+        if (latest.readiness_score < previous.readiness_score - 15) {
+          insights.push({
+            type: "warning",
+            title: lang === "pt" ? "Queda de Prontidão" : "Readiness Drop",
+            message: lang === "pt" ? `Sua prontidão caiu ${previous.readiness_score - latest.readiness_score}% desde ontem. Considere reduzir a carga.` : `Your readiness dropped ${previous.readiness_score - latest.readiness_score}% since yesterday. Consider reducing load.`,
+            icon: TrendingDown
+          });
+        }
+        
+        const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
+        if (maxPain > 6) {
+          insights.push({
+            type: "critical",
+            title: lang === "pt" ? "Alerta de Dor" : "Pain Alert",
+            message: lang === "pt" ? "Nível de dor crítico detectado. Informe seu fisioterapeuta imediatamente." : "Critical pain level detected. Inform your physical therapist immediately.",
+            icon: AlertTriangle
+          });
+        }
+      }
+
+      if (insights.length === 0) return null;
+
+      return (
+        <div className="space-y-4">
+          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+            <Lightbulb className="w-4 h-4" />
+            Insights Clínicos
+          </h3>
+          <div className="grid gap-4">
+            {insights.map((insight, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-4 rounded-2xl border ${
+                  insight.type === 'critical' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'
+                } flex gap-4`}
+              >
+                <div className={`p-2 rounded-lg h-fit ${
+                  insight.type === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
+                }`}>
+                  <insight.icon className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black text-white uppercase tracking-tight">{insight.title}</p>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{insight.message}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     const RecoveryChecklist = () => {
       const tasks = [];
       const latest = checkins[0];
@@ -1679,367 +1740,6 @@ export function AthleteDashboard({
         isToday: i === 6,
       };
     });
-
-  const ClinicalInsights = () => {
-  if (!checkins || checkins.length === 0) return null;
-
-  const latest = checkins[0];
-  const previous = checkins[1];
-
-  const readiness = latest?.readiness_score ?? 0;
-
-  const variation = previous
-    ? readiness - previous.readiness_score
-    : 0;
-
-  const getBaseline = (data: any[], field: string) => {
-    const valid = data.slice(0, 7).map(d => d[field]).filter(Boolean);
-    if (valid.length === 0) return 0;
-    return valid.reduce((a, b) => a + b, 0) / valid.length;
-  };
-
-  const baselineReadiness = getBaseline(checkins, 'readiness_score');
-  const baselineSleep = getBaseline(checkins, 'sleep_hours');
-  const baselineFatigue = getBaseline(checkins, 'fatigue');
-
-  const readinessDeviation = readiness - baselineReadiness;
-  const sleepDeviation = (latest?.sleep_hours ?? 0) - baselineSleep;
-  const fatigueDeviation = (latest?.fatigue ?? 0) - baselineFatigue;
-
-  const insights = [];
-
-  if (variation < -10) {
-    insights.push({ type: "warning", message: "Queda aguda de prontidão" });
-  }
-
-  if (readinessDeviation < -15) {
-    insights.push({ type: "critical", message: "Prontidão abaixo do padrão" });
-  }
-
-  if (sleepDeviation < -2) {
-    insights.push({ type: "warning", message: "Sono abaixo do ideal" });
-  }
-
-  if (fatigueDeviation > 1) {
-    insights.push({ type: "warning", message: "Fadiga elevada" });
-  }
-
-  return (
-    <div>
-      {insights.map((i, index) => (
-        <div key={index}>{i.message}</div>
-      ))}
-    </div>
-  );
-};
-      
-      // 2. Risk Projection (3-5 days) - v5.0
-      const recentTrend = variation + (previous && threeDaysAgo ? previous.readiness_score - threeDaysAgo.readiness_score : 0);
-      const projectedReadiness = Math.max(0, Math.min(100, readiness + (recentTrend / 2)));
-      
-      // 3. Advanced Confidence Score (Variability) - v5.0
-      const recentReadiness = checkins.slice(0, 14).map(r => r.readiness_score);
-      const mean = recentReadiness.reduce((a, b) => a + b, 0) / (recentReadiness.length || 1);
-      const variance = recentReadiness.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (recentReadiness.length || 1);
-      const stdDev = Math.sqrt(variance);
-      const confidence = Math.max(30, Math.min(100, 100 - (stdDev * 2) + (checkins.length * 2)));
-
-      // 4. Weighted Moving Average (WMA)
-      const wmaReadiness = latest && previous && threeDaysAgo 
-        ? Math.round((latest.readiness_score * 0.5) + (previous.readiness_score * 0.3) + (threeDaysAgo.readiness_score * 0.2))
-        : readiness;
-
-      // 5. Chronic Fatigue (7 days)
-      const chronicFatigue = checkins.slice(0, 7).reduce((acc, r) => acc + (r.fatigue_level || 0), 0) / Math.min(checkins.length, 7);
-      const isChronicOverload = chronicFatigue > (baselineFatigue * 1.25);
-
-      // 6. ACWR & Hidden Risk
-      const latestWorkload = workloadData[0];
-      const acwr = latestWorkload?.acwr || 1.0;
-      const hasHiddenRisk = (acwr > 1.3 || acwr < 0.7) && readiness > (baselineReadiness * 1.05);
-
-      // 7. Regional Risk Analysis
-      const sportKey = (athleteData?.sport?.toLowerCase() || 'default') as keyof typeof SPORT_PROFILES;
-      const sportProfile = SPORT_PROFILES[sportKey] || SPORT_PROFILES.default;
-      
-      const regionalRisks: Record<string, number> = {};
-      Object.keys(BODY_REGIONS).forEach(region => {
-        regionalRisks[region] = 0;
-      });
-
-      Object.entries(finalPainMap).forEach(([partId, data]: [string, any]) => {
-        const region = mapPartToRegion(partId);
-        if (region && regionalRisks[region] !== undefined) {
-          const weight = sportProfile.weights[region] || 1.0;
-          regionalRisks[region] = Math.max(regionalRisks[region], data.level * 10 * weight);
-        }
-      });
-
-      const criticalRegion = Object.entries(regionalRisks).reduce((a, b) => a[1] > b[1] ? a : b);
-      const maxRegionalRisk = criticalRegion[1];
-
-      // 8. Decision Explanation (v5.0 - Top 3)
-      const explanations: string[] = [];
-      if (latest?.sleep_quality < baselineSleep) explanations.push(lang === "pt" ? "Sono abaixo do baseline saudável" : "Sleep below healthy baseline");
-      if (latest?.fatigue_level > baselineFatigue) explanations.push(lang === "pt" ? "Fadiga acima da média histórica" : "Fatigue above historical average");
-      if (maxRegionalRisk > 30) explanations.push(lang === "pt" ? `Sobrecarga no ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].pt}` : `Overload in ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].en}`);
-      if (acwr > 1.4) explanations.push(lang === "pt" ? "ACWR em zona de perigo (>1.4)" : "ACWR in danger zone (>1.4)");
-      if (variation < -15) explanations.push(lang === "pt" ? "Queda brusca de prontidão" : "Sudden readiness drop");
-
-      const topExplanations = explanations.slice(0, 3);
-      const remainingCount = explanations.length - 3;
-
-      // 9. Clinical Pattern Detection
-      const patterns = [];
-      if (maxRegionalRisk > 50 && checkins.slice(0, 3).every(r => r.muscle_soreness > 3)) {
-        patterns.push({ id: 'tendon', label: lang === "pt" ? "Padrão Tendinopatia" : "Tendinopathy Pattern", severity: 'high' });
-      }
-      if (isChronicOverload && readiness < (baselineReadiness * 0.75)) {
-        patterns.push({ id: 'overtrain', label: lang === "pt" ? "Risco de Overtraining" : "Overtraining Risk", severity: 'critical' });
-      }
-      if (hasHiddenRisk) {
-        patterns.push({ id: 'hidden', label: lang === "pt" ? "Risco Oculto (ACWR)" : "Hidden Risk (ACWR)", severity: 'medium' });
-      }
-
-      // 10. Severity Score (v5.0)
-      let severity: 'low' | 'medium' | 'high' | 'critical' = 'low';
-      
-      // 11. Return to Play (RTP) Phase
-      let rtpPhase = 3; // Performance
-      if (maxRegionalRisk > 45) rtpPhase = 1; // Clinical
-      else if (readiness < (baselineReadiness * 0.85) || maxRegionalRisk > 15) rtpPhase = 2; // Functional
-
-      // 12. Global Risk Score v5.0 (Adaptive + Global Limits)
-      let riskScore = 0;
-      riskScore += maxRegionalRisk * 0.45;
-      riskScore += Math.max(0, (baselineSleep - (latest?.sleep_quality || baselineSleep))) * 18;
-      riskScore += Math.max(0, ((latest?.fatigue_level || 0) - baselineFatigue)) * 14;
-      riskScore += (latest?.stress_level || 0) * 6;
-      if (variation < -12) riskScore += 18;
-      if (isChronicOverload) riskScore += 12;
-      if (acwr > 1.5) riskScore += 25;
-
-      riskScore = Math.min(100, Math.round(riskScore));
-      
-      if (riskScore > 85) severity = 'critical';
-      else if (riskScore > 55) severity = 'high';
-      else if (riskScore > 30) severity = 'medium';
-
-      let decision = "normal";
-      if (wmaReadiness < (baselineReadiness * 0.55) || riskScore > 80 || maxRegionalRisk > 90) decision = "avoid";
-      else if (wmaReadiness <= (baselineReadiness * 0.8) || riskScore > 50 || maxRegionalRisk > 50) decision = "adjust";
-      
-      const getDecisionData = () => {
-        switch(decision) {
-          case 'avoid':
-            return {
-              title: lang === "pt" ? "Evitar Treino" : "Avoid Training",
-              color: "rose",
-              icon: AlertTriangle,
-              conduct: lang === "pt" 
-                ? `V5.0 CRÍTICO: Risco de evento clínico iminente. Projeção 3D: ${Math.round(projectedReadiness)}%.` 
-                : `V5.0 CRITICAL: Imminent clinical event risk. 3D Projection: ${Math.round(projectedReadiness)}%.`,
-              actions: lang === "pt" ? ["Fisioterapia", "Avaliação Médica", "Repouso"] : ["Physical Therapy", "Medical Assessment", "Rest"]
-            };
-          case 'adjust':
-            return {
-              title: lang === "pt" ? "Ajustar Carga" : "Adjust Load",
-              color: "amber",
-              icon: Zap,
-              conduct: lang === "pt"
-                ? `Ajuste v5.0: Desvio do baseline saudável detectado. Foco em ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].pt}.`
-                : `Adjust v5.0: Healthy baseline deviation detected. Focus on ${BODY_REGIONS[criticalRegion[0] as keyof typeof BODY_REGIONS].en}.`,
-              actions: lang === "pt" ? ["Volume -50%", "Mobilidade", "Sem Impacto"] : ["Volume -50%", "Mobility", "No Impact"]
-            };
-          default:
-            return {
-              title: lang === "pt" ? "Treino Normal" : "Normal Training",
-              color: "emerald",
-              icon: CheckCircle2,
-              conduct: lang === "pt" ? "Alta Performance: Atleta em zona de evolução. Confiança: " + confidence + "%." : "High Performance: Athlete in evolution zone. Confidence: " + confidence + "%.",
-              actions: lang === "pt" ? ["Manter Carga", "Monitorar ACWR", "Nutrição"] : ["Maintain Load", "Monitor ACWR", "Nutrition"]
-            };
-        }
-      };
-      
-      const dData = getDecisionData();
-      
-      return (
-        <Card className={`relative overflow-hidden border-2 transition-all duration-500 ${
-          dData.color === 'rose' ? 'border-rose-500/50 bg-rose-500/5' : 
-          dData.color === 'amber' ? 'border-amber-500/50 bg-amber-500/5' : 'border-emerald-500/50 bg-emerald-500/5'
-        }`}>
-          <div className={`absolute -top-24 -right-24 w-64 h-64 rounded-full blur-[100px] opacity-20 ${
-            dData.color === 'rose' ? 'bg-rose-500' : dData.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'
-          }`} />
-
-          <CardContent className="p-6 relative z-10">
-            <div className="flex flex-col xl:flex-row gap-8">
-              {/* STATUS & PREDICTIVE METRICS */}
-              <div className="flex-1 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <Brain className="w-4 h-4" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">EARS Engine v5.0 Predictive</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black text-slate-500 uppercase">Confiança:</span>
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map(i => (
-                        <div key={i} className={`w-2 h-1 rounded-full ${confidence >= (i * 20) ? 'bg-emerald-500' : 'bg-slate-800'}`} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">WMA vs Healthy</p>
-                    <div className="flex items-end gap-1">
-                      <span className="text-3xl font-black text-white">{wmaReadiness}%</span>
-                      <span className="text-[10px] font-bold text-slate-500 mb-1">/ {Math.round(baselineReadiness)}%</span>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Risco 3D</p>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-3xl font-black ${riskScore > 70 ? 'text-rose-500' : riskScore > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                        {riskScore}%
-                      </p>
-                      <div className={`flex items-center text-[10px] font-bold ${projectedReadiness < readiness ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {projectedReadiness < readiness ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                        {Math.round(projectedReadiness)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Severidade</p>
-                    <div className="flex items-center gap-2 h-9">
-                      <span className={`text-[10px] font-black px-2 py-1 rounded ${
-                        severity === 'critical' ? 'bg-rose-600 text-white' : 
-                        severity === 'high' ? 'bg-rose-500/20 text-rose-400' : 
-                        severity === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}>
-                        {severity.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* EXPLANATION LIST v5.0 */}
-                <div className="space-y-2">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fatores Determinantes</p>
-                  <div className="flex flex-col gap-1">
-                    {(showAllExplanations ? explanations : topExplanations).map((exp, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[10px] text-slate-400">
-                        <div className="w-1 h-1 rounded-full bg-slate-600" />
-                        {exp}
-                      </div>
-                    ))}
-                    {remainingCount > 0 && !showAllExplanations && (
-                      <button 
-                        onClick={() => setShowAllExplanations(true)}
-                        className="text-[9px] font-bold text-rose-400 hover:text-rose-300 transition-colors text-left"
-                      >
-                        + {remainingCount} {lang === "pt" ? "outros fatores" : "other factors"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* DECISION & BENCHMARK */}
-              <div className="flex-1 flex flex-col justify-center border-y xl:border-y-0 xl:border-x border-slate-800/50 py-6 xl:py-0 xl:px-8">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Decisão Clínica</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase">Benchmark:</span>
-                      <span className="text-[9px] font-black text-emerald-400">Top 15%</span>
-                    </div>
-                  </div>
-                  <div className={`flex items-center gap-4 p-4 rounded-2xl ${
-                    engineResult?.decision === 'avoid' ? 'bg-rose-500 text-white' : 
-                    engineResult?.decision === 'adjust' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-white'
-                  } shadow-lg transition-all duration-500`}>
-                    {engineResult?.decision === 'avoid' ? <AlertCircle className="w-8 h-8 shrink-0" /> : 
-                     engineResult?.decision === 'adjust' ? <RefreshCcw className="w-8 h-8 shrink-0" /> : 
-                     <CheckCircle className="w-8 h-8 shrink-0" />}
-                    <span className="text-xl font-black uppercase tracking-tight">
-                      {engineResult?.decision === 'avoid' ? (lang === "pt" ? "Evitar Treino" : "Avoid Training") :
-                       engineResult?.decision === 'adjust' ? (lang === "pt" ? "Ajustar Carga" : "Adjust Load") :
-                       (lang === "pt" ? "Treino Normal" : "Normal Training")}
-                    </span>
-                  </div>
-                  <p className="text-[9px] font-bold text-slate-500 text-center uppercase">
-                    Perfil: {sportProfile.name[lang]} • RTP: {rtpPhase === 1 ? 'CLINICAL' : rtpPhase === 2 ? 'FUNCTIONAL' : 'PERFORMANCE'}
-                  </p>
-                </div>
-              </div>
-
-              {/* CONDUCT & ACTIONS */}
-              <div className="flex-1 space-y-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conduta v5.0</p>
-                <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50">
-                  <p className="text-sm text-slate-300 leading-relaxed font-medium italic mb-3">
-                    &quot;{engineResult?.recommendation || "Aguardando dados..."}&quot;
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {engineResult?.alerts.map((alert, i) => (
-                      <span key={i} className="text-[9px] font-black bg-white/10 px-2 py-1 rounded uppercase tracking-tighter">
-                        • {alert}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* REGIONAL RISK & TIMELINE */}
-            <div className="mt-6 pt-6 border-t border-slate-800/50 flex flex-col md:flex-row gap-6">
-              <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-4">
-                {Object.entries(BODY_REGIONS).map(([key, label]) => {
-                  const risk = regionalRisks[key];
-                  return (
-                    <div key={key} className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-black text-slate-500 uppercase">{label[lang]}</span>
-                        <span className={`text-[9px] font-black ${risk > 60 ? 'text-rose-400' : risk > 30 ? 'text-amber-400' : 'text-slate-600'}`}>
-                          {Math.round(risk)}%
-                        </span>
-                      </div>
-                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${risk}%` }}
-                          className={`h-full rounded-full ${risk > 60 ? 'bg-rose-500' : risk > 30 ? 'bg-amber-500' : 'bg-emerald-500/30'}`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {patterns.length > 0 && (
-                <div className="md:w-64 space-y-2">
-                  <p className="text-[9px] font-black text-slate-500 uppercase">Eventos Clínicos</p>
-                  <div className="space-y-1">
-                    {patterns.map(p => (
-                      <div key={p.id} className="flex items-center gap-2 text-[10px] font-bold text-slate-300 bg-slate-800/50 px-2 py-1 rounded">
-                        <div className={`w-1.5 h-1.5 rounded-full ${p.severity === 'critical' ? 'bg-rose-500' : 'bg-amber-500'}`} />
-                        {p.label}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      );
-    };
 
     return (
       <PageContainer maxWidth="3xl" className="pt-safe">
