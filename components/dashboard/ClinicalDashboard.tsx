@@ -151,7 +151,7 @@ export function ClinicalDashboard({ onViewAthlete }: ClinicalDashboardProps) {
       let stableCount = 0;
       let checkinsToday = 0;
 
-      const sAlerts: SmartAlert[] = [];
+      const sAlerts: any[] = [];
 
       const prioritizedList: PrioritizedAthlete[] = (athletesData || []).map(athlete => {
         const records = wellnessByAthlete.get(athlete.id) || [];

@@ -20,7 +20,11 @@ import {
   AlertCircle,
   CheckCircle,
   User,
-  Brain
+  Brain,
+  Zap,
+  Heart,
+  BarChart3,
+  TrendingUp
 } from "lucide-react";
 import { AthleteRegistration } from "./AthleteRegistration";
 import { AthleteDashboard } from "./AthleteDashboard";

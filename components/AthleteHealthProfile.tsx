@@ -1146,6 +1146,8 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
     treatments: [] as string[],
     obs: ''
   });
+  
+  const [isListening, setIsListening] = useState(false);
 
   const handleEditNote = (note: any) => {
     setEditingNoteId(note.id);

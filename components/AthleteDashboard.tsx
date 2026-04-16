@@ -609,6 +609,7 @@ export function AthleteDashboard({
 
   const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
   const [setupCycleLength, setSetupCycleLength] = useState(28);
+  const [motivationalQuote, setMotivationalQuote] = useState(motivationalQuotes[0]);
 
   const isMounted = useRef(false);
   useEffect(() => {
@@ -646,7 +647,7 @@ export function AthleteDashboard({
 
   // Set random quote
   useEffect(() => {
-    setQuote(
+    setMotivationalQuote(
       motivationalQuotes[
         Math.floor(Math.random() * motivationalQuotes.length)
       ],
@@ -1852,10 +1853,10 @@ export function AthleteDashboard({
         <div className={`bg-slate-900/40 p-6 rounded-2xl border ${theme.borderAlpha} relative ${theme.shadowStrong} overflow-hidden max-w-md mx-auto`}>
           <Quote className={`absolute top-4 left-4 w-6 h-6 ${theme.bgAlpha}`} />
           <p className="text-sm text-slate-300 font-medium italic relative z-10 leading-relaxed pt-2 px-4">
-            &quot;{quote.text}&quot;
+            &quot;{motivationalQuote.text}&quot;
           </p>
           <p className={`text-xs ${theme.text} font-bold uppercase tracking-widest mt-3`}>
-            — {quote.author}
+            — {motivationalQuote.author}
           </p>
         </div>
 
