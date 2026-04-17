@@ -1,11 +1,7 @@
 "use client";
 
-import { LoginScreen } from '@/components/LoginScreen';
+import { MainDashboard } from '@/components/MainDashboard';
 
 export default function ClientHome() {
-  const handleLogin = (role: any) => {
-    alert("Login funcionando: " + role);
-  };
-
-  return <LoginScreen onLogin={handleLogin} />;
+  return <MainDashboard onLogout={() => {}} />;
 }
