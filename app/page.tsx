@@ -1,5 +1,5 @@
-"use client";
+import ClientHome from './ClientHome';
 
-export const dynamic = 'force-dynamic';
-
-import React, { useState, useEffect } from 'react';
+export default function Page() {
+  return <ClientHome />;
+}
