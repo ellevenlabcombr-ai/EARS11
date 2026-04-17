@@ -31,11 +31,15 @@ export function CreateEventModal({ isOpen, onClose, onSave }: CreateEventModalPr
       risk_score: formData.risk_score
     });
 
-    onSave({
+    const preparedData = {
       ...formData,
+      athlete_id: formData.athlete_id.trim() === "" ? null : formData.athlete_id,
       priority,
-      origin: 'manual'
-    });
+      origin: 'manual',
+      created_at: new Date().toISOString()
+    };
+
+    onSave(preparedData);
     
     // Reset form
     setFormData({

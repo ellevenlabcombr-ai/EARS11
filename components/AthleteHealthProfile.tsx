@@ -555,8 +555,28 @@ export function AthleteHealthProfile({ athlete: initialAthlete, onBack, onSave }
   const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
   const [selectedClinicalRegion, setSelectedClinicalRegion] = useState<{id: string, label: string} | null>(null);
 
-  const athleteSport = (athlete.sport as SportType) || 'Vôlei';
-  const sportProfile = SPORT_PROFILES[athleteSport] || SPORT_PROFILES['Vôlei'];
+  const getSportProfile = (sportName: string | null | undefined): SportProfile => {
+    if (!sportName) return SPORT_PROFILES['Vôlei']; // Default fallback
+    
+    // Try exact match
+    if (SPORT_PROFILES[sportName as SportType]) {
+      return SPORT_PROFILES[sportName as SportType];
+    }
+    
+    // Try case-insensitive and without accents
+    const normalized = sportName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    for (const key of Object.keys(SPORT_PROFILES)) {
+      const normalizedKey = key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normalized === normalizedKey) {
+        return SPORT_PROFILES[key as SportType];
+      }
+    }
+    
+    return SPORT_PROFILES['Vôlei'];
+  };
+
+  const sportProfile = getSportProfile(athlete.sport);
 
   const calculateRiskScore = (regionId: string) => {
     const data = generateRegionEvolution(regionId);

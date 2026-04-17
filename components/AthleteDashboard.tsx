@@ -157,6 +157,7 @@ const BODY_REGIONS = {
   ankle: { pt: "Tornozelo", en: "Ankle" },
   hip: { pt: "Quadril", en: "Hip" },
   lumbar: { pt: "Lombar", en: "Lumbar" },
+  neck: { pt: "Cervical", en: "Neck/Cervical" },
 };
 
 const SPORT_PROFILES: Record<string, any> = {
@@ -172,9 +173,13 @@ const SPORT_PROFILES: Record<string, any> = {
     name: { pt: "Basquete", en: "Basketball" },
     weights: { knee: 1.5, ankle: 1.4, lumbar: 1.2, shoulder: 1.1, hip: 1.1 }
   },
+  judo: {
+    name: { pt: "Judô", en: "Judo" },
+    weights: { shoulder: 1.5, lumbar: 1.4, knee: 1.3, neck: 1.2, hip: 1.1 }
+  },
   default: {
     name: { pt: "Geral", en: "General" },
-    weights: { knee: 1.0, shoulder: 1.0, ankle: 1.0, hip: 1.0, lumbar: 1.0 }
+    weights: { knee: 1.0, shoulder: 1.0, ankle: 1.0, hip: 1.0, lumbar: 1.0, neck: 1.0 }
   }
 };
 
@@ -185,6 +190,7 @@ const mapPartToRegion = (partId: string): string | null => {
   if (id.includes('ankle')) return 'ankle';
   if (id.includes('hip') || id.includes('pelvis') || id.includes('glutes')) return 'hip';
   if (id.includes('lumbar') || id.includes('back')) return 'lumbar';
+  if (id.includes('neck') || id.includes('cervical')) return 'neck';
   return null;
 };
 
@@ -2506,58 +2512,11 @@ export function AthleteDashboard({
               })}
             </div>
 
-            {Object.keys(painMap).length > 0 && (
-              <div className="mt-6 pt-6 border-t border-slate-800/50">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">
-                  {t[lang].painMapping}
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                  <div className="lg:col-span-7 w-full overflow-hidden">
-                    <PainMap 
-                      value={painMap} 
-                      readOnly={true}
-                    />
-                  </div>
-                  <div className="lg:col-span-5 space-y-8 w-full">
-                    <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 space-y-4">
-                      <div className="flex justify-between items-end">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intensidade Geral</p>
-                        <p className={`text-2xl font-black ${Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) > 4 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level))}/10
-                        </p>
-                      </div>
-                      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) <= 3 ? 'bg-emerald-500' : 
-                            Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) <= 6 ? 'bg-yellow-500' : 'bg-rose-500'
-                          }`}
-                          style={{ width: `${(Math.max(answers.muscle_soreness || 0, ...Object.values(painMap).map(p => p.level)) / 10) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locais Detalhados</p>
-                      <div className="grid grid-cols-1 gap-2">
-                        {Object.entries(painMap).map(([part, data]) => (
-                          <div 
-                            key={part}
-                            className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between group hover:bg-rose-500/10 transition-all"
-                          >
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                              {getPainLocationLabel(part)}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-1 rounded uppercase">
-                                Nível {data.level}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {/* Manual note if present */}
+            {notes && (
+              <div className="mt-4 p-4 bg-slate-950/50 border border-slate-800/50 rounded-xl">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Sua Observação</p>
+                <p className="text-sm text-slate-300 italic">"{notes}"</p>
               </div>
             )}
           </CardContent>
