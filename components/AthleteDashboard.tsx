@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Card,
@@ -431,7 +433,7 @@ export function AthleteDashboard({
 
   const [lang, setLang] = useState<Language>("pt");
   const [view, setView] = useState<ViewState>("history");
-  
+
   // Athlete profile state
   const [athleteData, setAthleteData] = useState<Athlete | null>(null);
   const [loadingAthlete, setLoadingAthlete] = useState(true);
@@ -1481,6 +1483,28 @@ export function AthleteDashboard({
   const toggleLang = () => {
     setLang((prev) => (prev === "pt" ? "en" : "pt"));
   };
+
+  if (!athleteId) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <p className="text-rose-400 font-bold uppercase tracking-widest text-xs">Erro: ID do atleta não encontrado.</p>
+          <Button onClick={onBack} variant="outline" className="text-slate-400 border-slate-800">Voltar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingAthlete) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Carregando perfil...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (view === "cycle_setup") {
     return (
@@ -2920,17 +2944,6 @@ export function AthleteDashboard({
   }
 
   // Questionnaire View
-  if (loadingAthlete) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Carregando perfil...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <PageContainer maxWidth="3xl" className="pt-safe">
       <div className="space-y-8 pb-12">
