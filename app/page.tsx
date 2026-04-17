@@ -1,5 +1,5 @@
-import { LoginScreen } from '@/components/LoginScreen';
+"use client";
 
-export default function Home() {
-  return <LoginScreen onLogin={() => {}} />;
-}
+export const dynamic = 'force-dynamic';
+
+import React, { useState, useEffect } from 'react';
