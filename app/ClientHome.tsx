@@ -38,16 +38,13 @@ export default function ClientHome() {
   }
 
   if (userRole === 'athlete') {
-    return (
-      <AthleteDashboard
-        onBack={handleLogout}
-        onDirtyChange={setIsDirty}
-        athleteId={loggedInAthlete?.id}
-        athleteGender={loggedInAthlete?.gender}
-      />
-    );
-  }
-
+  return (
+    <div style={{ padding: 40 }}>
+      <h1>Entrou no Athlete ✅</h1>
+      <p>ID: {String(loggedInAthlete?.id)}</p>
+    </div>
+  );
+}
   return <MainDashboard onLogout={handleLogout} />;
 } catch (err: any) {
   return (
