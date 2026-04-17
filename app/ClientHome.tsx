@@ -3,5 +3,9 @@
 import { LoginScreen } from '@/components/LoginScreen';
 
 export default function ClientHome() {
-  return <LoginScreen onLogin={() => {}} />;
+  const handleLogin = (role: any) => {
+    alert("Login funcionando: " + role);
+  };
+
+  return <LoginScreen onLogin={handleLogin} />;
 }
