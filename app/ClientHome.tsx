@@ -30,6 +30,7 @@ export default function ClientHome() {
     if (athleteData) setLoggedInAthlete(athleteData);
   };
 
+  try {
   if (isInitializing) return <div>Loading...</div>;
 
   if (!userRole) {
@@ -47,5 +48,14 @@ export default function ClientHome() {
     );
   }
 
+  return <MainDashboard onLogout={handleLogout} />;
+} catch (err: any) {
+  return (
+    <div style={{ padding: 40 }}>
+      <h1>Erro capturado 💥</h1>
+      <pre>{String(err)}</pre>
+    </div>
+  );
+}
   return <MainDashboard onLogout={handleLogout} />;
 }
