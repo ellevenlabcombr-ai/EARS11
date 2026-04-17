@@ -1,11 +1,5 @@
-import { AppLayout } from '@/components/layout/AppLayout';
+import { LoginScreen } from '@/components/LoginScreen';
 
 export default function Home() {
-  return (
-    <AppLayout>
-      <div style={{ padding: 40 }}>
-        <h1>Teste Layout</h1>
-      </div>
-    </AppLayout>
-  );
+  return <LoginScreen onLogin={() => {}} />;
 }
