@@ -63,7 +63,6 @@ import {
   AlertTriangle,
   Minus,
   CheckCircle2 as CheckCircle,
-  CheckCircle as CheckCircleIcon,
   LayoutDashboard,
   Users,
   Calendar,
@@ -430,19 +429,30 @@ export function AthleteDashboard({
   console.log("AthleteDashboard rendered with athleteId:", athleteId);
   const { checkins, engineResult, loading: storeLoading, fetchCheckins: storeFetchCheckins } = useAthleteStore();
 
-  useEffect(() => {
-    if (athleteId) {
-      storeFetchCheckins(athleteId, athleteData?.sport);
-    }
-  }, [athleteId, athleteData?.sport, storeFetchCheckins]);
-
   const [lang, setLang] = useState<Language>("pt");
   const [view, setView] = useState<ViewState>("history");
+  
+  // Athlete profile state
+  const [athleteData, setAthleteData] = useState<Athlete | null>(null);
+  const [loadingAthlete, setLoadingAthlete] = useState(true);
+  const [athleteCode, setAthleteCode] = useState<string | null>(null);
+  const [xp, setXp] = useState(0);
+  const [coins, setCoins] = useState(0);
+  
+  // Records & Tracking
+  const [latestPainMap, setLatestPainMap] = useState<Record<string, { level: number; type: string }>>({});
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [respondedToday, setRespondedToday] = useState<boolean>(false);
+  const [todaySummary, setTodaySummary] = useState<any>(null);
+  const [workloadData, setWorkloadData] = useState<any[]>([]);
+  
+  // Questionnaires & Setup
+  const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
+  const [setupCycleLength, setSetupCycleLength] = useState(28);
+  const [motivationalQuote, setMotivationalQuote] = useState(motivationalQuotes[0]);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
-  const [painMap, setPainMap] = useState<
-    Record<string, { level: number; type: string }>
-  >({});
+  const [painMap, setPainMap] = useState<Record<string, { level: number; type: string }>>({});
   const [menstrualSymptoms, setMenstrualSymptoms] = useState<string[]>([]);
   const [symptoms, setSymptoms] = useState<Record<string, number>>({
     headache: 0,
@@ -458,8 +468,15 @@ export function AthleteDashboard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Squad monitor
   const [allAthletesData, setAllAthletesData] = useState<any[]>([]);
   const [loadingSquad, setLoadingSquad] = useState(false);
+
+  useEffect(() => {
+    if (athleteId) {
+      storeFetchCheckins(athleteId, athleteData?.sport);
+    }
+  }, [athleteId, athleteData?.sport, storeFetchCheckins]);
 
   const fetchSquadData = async () => {
     if (!supabase) return;
@@ -570,20 +587,6 @@ export function AthleteDashboard({
       </div>
     );
   };
-  const [latestPainMap, setLatestPainMap] = useState<Record<string, { level: number; type: string }>>({});
-  const [athleteData, setAthleteData] = useState<Athlete | null>(null);
-  const [loadingAthlete, setLoadingAthlete] = useState(true);
-  const [athleteCode, setAthleteCode] = useState<string | null>(null);
-  const [xp, setXp] = useState(0);
-  const [coins, setCoins] = useState(0);
-  const [selectedRecord, setSelectedRecord] = useState<any>(null);
-  const [respondedToday, setRespondedToday] = useState<boolean>(false);
-  const [todaySummary, setTodaySummary] = useState<any>(null);
-  const [workloadData, setWorkloadData] = useState<any[]>([]);
-
-  const [setupLastPeriod, setSetupLastPeriod] = useState(getLocalDateString());
-  const [setupCycleLength, setSetupCycleLength] = useState(28);
-  const [motivationalQuote, setMotivationalQuote] = useState(motivationalQuotes[0]);
 
   const isMounted = useRef(false);
   useEffect(() => {
@@ -1658,7 +1661,7 @@ export function AthleteDashboard({
           const parts = raw.split(',').map((s: string) => s.trim());
           const map: Record<string, any> = {};
           parts.forEach((p: string) => {
-            if (p) map[p] = { level: latestCheckIn.muscle_soreness || 5, type: 'muscle' };
+            if (p) map[p] = { level: latestCheckIn?.muscle_soreness || 5, type: 'muscle' };
           });
           return map;
         }
@@ -1857,8 +1860,8 @@ export function AthleteDashboard({
                   <p className="text-xs text-rose-200/80 leading-relaxed">
                     {cycleInfo.isLate ? (
                       lang === "pt" 
-                        ? `Seu ciclo está com ${Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength} dias de atraso. Por favor, informe se o ciclo iniciou ou procure a comissão.`
-                        : `Your cycle is ${Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength} days late. Please report if it started or contact the staff.`
+                        ? `Seu ciclo está com ${athleteData?.last_period_date ? Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength : 0} dias de atraso. Por favor, informe se o ciclo iniciou ou procure a comissão.`
+                        : `Your cycle is ${athleteData?.last_period_date ? Math.floor((new Date().getTime() - new Date(athleteData.last_period_date).getTime()) / (1000*60*60*24)) - cycleInfo.cycleLength : 0} days late. Please report if it started or contact the staff.`
                     ) : (
                       lang === "pt"
                         ? `Você está no Dia ${cycleInfo.currentDay} (${cycleInfo.phase}). Próxima menstruação em aproximadamente ${cycleInfo.nextPeriodDays} dias.`

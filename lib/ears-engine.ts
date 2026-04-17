@@ -45,9 +45,9 @@ export const calculateRisk = (data: Partial<WellnessRecord>, acwr: number = 1.0,
   // Apply sport-specific weights if pain map is available
   if (sport && data.soreness_location) {
     try {
-      const painMap = typeof data.soreness_location === 'string' 
+      const painMap = (typeof data.soreness_location === 'string' && data.soreness_location.trim() !== '')
         ? JSON.parse(data.soreness_location) 
-        : data.soreness_location;
+        : (data.soreness_location || []);
       
       if (Array.isArray(painMap) && painMap.length > 0) {
         const profile = getSportProfile(sport);
@@ -56,12 +56,14 @@ export const calculateRisk = (data: Partial<WellnessRecord>, acwr: number = 1.0,
         
         painMap.forEach((p: any) => {
           const regionId = p.region?.toLowerCase();
+          if (!regionId) return;
+
           const pLevel = p.intensity || p.level || 0;
           
           // Find if this region is a priority for the sport
           // Mapping local region IDs to priority region IDs might be needed
           const priority = profile.priorityRegions.find(r => 
-            r.id.toLowerCase().includes(regionId) || regionId.includes(r.id.toLowerCase())
+            r.id.toLowerCase().includes(regionId) || regionId?.includes(r.id.toLowerCase())
           );
           
           const weight = priority ? (priority.loadLevel === 3 ? 1.5 : priority.loadLevel === 2 ? 1.2 : 1.0) : 1.0;
@@ -151,12 +153,21 @@ export const earsEngine = (
     const normalizedSport = sport.toLowerCase();
     if (normalizedSport.includes('judo')) {
       // Example Judo specific check
-      const painMap = typeof current.soreness_location === 'string' 
-        ? JSON.parse(current.soreness_location) 
-        : current.soreness_location || [];
+      let painMap = [];
+      try {
+        painMap = (typeof current.soreness_location === 'string' && current.soreness_location.trim() !== '')
+          ? JSON.parse(current.soreness_location) 
+          : (current.soreness_location || []);
+      } catch (e) {
+        console.warn("Failed to parse soreness_location as JSON", e);
+        // Fallback for legacy comma-separated strings
+        if (typeof current.soreness_location === 'string' && current.soreness_location.trim() !== '') {
+          painMap = current.soreness_location.split(',').map(part => ({ region: part.trim(), level: current.muscle_soreness || 5 }));
+        }
+      }
       
       const hasCervicalPain = Array.isArray(painMap) && painMap.some((p: any) => 
-        (p.region?.toLowerCase() === 'cervical' || p.region?.toLowerCase() === 'neck') && p.intensity > 3
+        (p.region?.toLowerCase() === 'cervical' || p.region?.toLowerCase() === 'neck') && (p.intensity > 3 || p.level > 3)
       );
       
       if (hasCervicalPain) {
