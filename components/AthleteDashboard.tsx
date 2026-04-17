@@ -515,6 +515,59 @@ export function AthleteDashboard({
     }
   }, [view]);
 
+  // Gamification & Insights Logic - Defined early to avoid reference errors
+  const latestCheckIn = checkins[0];
+  const hasCheckedInToday =
+    latestCheckIn &&
+    parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toDateString() ===
+      new Date().toDateString();
+  const currentReadiness = latestCheckIn?.readiness_score ?? 0;
+
+  const latestPainMapData = (() => {
+    const raw = latestCheckIn?.soreness_location;
+    if (!raw || raw === 'Nenhuma') return {};
+    
+    // If it's already an object/array (Supabase auto-parsing)
+    if (typeof raw === 'object' && raw !== null) {
+      if (Array.isArray(raw)) {
+        const map: Record<string, any> = {};
+        raw.forEach(item => {
+          map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
+        });
+        return map;
+      }
+      return raw;
+    }
+
+    // If it's a string, try parsing it
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const map: Record<string, any> = {};
+          parsed.forEach(item => {
+            map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
+          });
+          return map;
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          return parsed;
+        }
+      } catch (e) {
+        // Not JSON, try split
+        const parts = raw.split(',').map((s: string) => s.trim());
+        const map: Record<string, any> = {};
+        parts.forEach((p: string) => {
+          if (p) map[p] = { level: latestCheckIn?.muscle_soreness || 5, type: 'muscle' };
+        });
+        return map;
+      }
+    }
+    return {};
+  })();
+
+  const finalPainMap = Object.keys(latestPainMapData).length > 0 ? latestPainMapData : latestPainMap;
+
+  // Sub-components moved outside or defined as helper functions to avoid re-creation
   const SquadOverview = () => {
     const sortedSquad = [...allAthletesData].sort((a, b) => {
       const riskA = a.latestWellness?.readiness_score || 0;
@@ -588,6 +641,226 @@ export function AthleteDashboard({
     );
   };
 
+  const RecoveryChecklist = () => {
+    const tasks = [];
+    const latest = checkins[0];
+    
+    if (latest) {
+      if (latest.sleep_quality <= 2) {
+        tasks.push({ id: 'sleep', title: "Higiene do sono (90min antes)", icon: Moon });
+      }
+      if (latest.fatigue_level >= 4) {
+        tasks.push({ id: 'recovery', title: "Sessão de Recovery (Botas/Gelo)", icon: RefreshCcw });
+      }
+      const maxPain = latest.muscle_soreness || 0;
+      if (maxPain >= 4) {
+        tasks.push({ id: 'physio', title: "Avaliação com Fisioterapia", icon: Activity });
+      }
+      if (latest.stress_level >= 4) {
+        tasks.push({ id: 'meditation', title: "Meditação / Respiração (10min)", icon: Brain });
+      }
+    }
+
+    if (tasks.length === 0) {
+      tasks.push({ id: 'default', title: "Manter hidratação constante", icon: Droplets });
+      tasks.push({ id: 'default2', title: "Mobilidade articular matinal", icon: ActivitySquare });
+    }
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+          <CheckCircle className="w-4 h-4" />
+          Checklist de Recuperação
+        </h3>
+        <div className="grid gap-3">
+          {tasks.map((task) => (
+            <div key={task.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 group hover:border-slate-700 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-white transition-colors">
+                  <task.icon className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-bold text-slate-300">{task.title}</span>
+              </div>
+              <div className="w-6 h-6 rounded-full border-2 border-slate-700 flex items-center justify-center group-hover:border-emerald-500 transition-all">
+                <div className="w-3 h-3 rounded-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-all" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const ClinicalInsights = () => {
+    const insights = [];
+    
+    if (checkins.length >= 2) {
+      const latest = checkins[0];
+      const previous = checkins[1];
+      
+      if (latest.readiness_score < previous.readiness_score - 15) {
+        insights.push({
+          type: "warning",
+          title: lang === "pt" ? "Queda de Prontidão" : "Readiness Drop",
+          message: lang === "pt" ? `Sua prontidão caiu ${previous.readiness_score - latest.readiness_score}% desde ontem. Considere reduzir a carga.` : `Your readiness dropped ${previous.readiness_score - latest.readiness_score}% since yesterday. Consider reducing load.`,
+          icon: TrendingDown
+        });
+      }
+      
+      const maxPain = Math.max(0, ...Object.values(finalPainMap).map((p: any) => p.level));
+      if (maxPain > 6) {
+        insights.push({
+          type: "critical",
+          title: lang === "pt" ? "Alerta de Dor" : "Pain Alert",
+          message: lang === "pt" ? "Nível de dor crítico detectado. Informe seu fisioterapeuta imediatamente." : "Critical pain level detected. Inform your physical therapist immediately.",
+          icon: AlertTriangle
+        });
+      }
+    }
+
+    if (insights.length === 0) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">
+          <Lightbulb className="w-4 h-4" />
+          Insights Clínicos
+        </h3>
+        <div className="grid gap-4">
+          {insights.map((insight, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-2xl border ${
+                insight.type === 'critical' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'
+              } flex gap-4`}
+            >
+              <div className={`p-2 rounded-lg h-fit ${
+                insight.type === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
+              }`}>
+                <insight.icon className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-black text-white uppercase tracking-tight">{insight.title}</p>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{insight.message}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const DecisionEngineCard = () => {
+    if (!engineResult) return null;
+
+    const { readiness, risk, recovery, status, decision, recommendation, alerts, trend } = engineResult;
+
+    const statusColors = {
+      low: "border-emerald-500/30 bg-emerald-500/5",
+      moderate: "border-amber-500/30 bg-amber-500/5",
+      high: "border-rose-500/30 bg-rose-500/5",
+    };
+
+    const decisionColors = {
+      normal: "bg-emerald-500 text-white",
+      adjust: "bg-amber-500 text-black",
+      avoid: "bg-rose-500 text-white",
+    };
+
+    const decisionLabels = {
+      normal: lang === "pt" ? "TREINO NORMAL" : "NORMAL TRAINING",
+      adjust: lang === "pt" ? "AJUSTAR CARGA" : "ADJUST LOAD",
+      avoid: lang === "pt" ? "EVITAR TREINO" : "AVOID TRAINING",
+    };
+
+    return (
+      <Card className={`overflow-hidden border-2 shadow-2xl ${statusColors[status]} transition-all duration-500`}>
+        <CardHeader className="pb-2 border-b border-white/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-indigo-400" />
+              <CardTitle className="text-lg font-black text-white uppercase tracking-tighter">
+                EARS Decision Engine <span className="text-[10px] text-slate-500 font-mono">v5.0</span>
+              </CardTitle>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${decisionColors[decision]}`}>
+              {decisionLabels[decision]}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center space-y-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Prontidão</p>
+              <p className={`text-2xl font-black ${readiness > 75 ? 'text-emerald-400' : readiness > 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                {readiness}%
+              </p>
+            </div>
+            <div className="text-center space-y-1 border-x border-white/5">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Risco</p>
+              <p className={`text-2xl font-black ${risk < 30 ? 'text-emerald-400' : risk < 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                {risk}%
+              </p>
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recovery</p>
+              <p className="text-2xl font-black text-indigo-400">{recovery}%</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
+            <div className="flex items-start gap-3">
+              <div className={`p-2 rounded-lg ${decisionColors[decision]} bg-opacity-20`}>
+                <Target className={`w-5 h-5 ${decision === 'adjust' ? 'text-amber-400' : decision === 'avoid' ? 'text-rose-400' : 'text-emerald-400'}`} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Conduta Recomendada</p>
+                <p className="text-sm text-white font-medium leading-relaxed italic">
+                  &quot;{recommendation}&quot;
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 space-y-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <AlertTriangle className="w-3 h-3" /> Alertas Ativos
+              </p>
+              <div className="space-y-2">
+                {alerts.length > 0 ? (
+                  alerts.map((alert, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">
+                      <div className="w-1 h-1 rounded-full bg-rose-500" />
+                      {alert}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                    Nenhum alerta crítico detectado.
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="sm:w-32 space-y-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tendência</p>
+              <div className={`flex items-center justify-center gap-2 p-3 rounded-xl border ${
+                trend === 'melhora' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                trend === 'queda' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+                'bg-slate-800 border-slate-700 text-slate-400'
+              }`}>
+                {trend === 'melhora' ? <TrendingUp className="w-4 h-4" /> : trend === 'queda' ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                <span className="text-[10px] font-black uppercase">{trend}</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const isMounted = useRef(false);
   useEffect(() => {
     if (!isMounted.current) {
@@ -622,6 +895,50 @@ export function AthleteDashboard({
     button: athleteGender === "M" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-rose-600 hover:bg-rose-500",
   };
 
+  // Use real data if available, otherwise 0
+  const currentXp = athleteData?.xp || 0;
+  const currentCoins = athleteData?.coins || 0;
+  const athleteLevel = Math.floor(currentXp / 500) + 1;
+
+  const getInsight = () => {
+    if (!latestCheckIn)
+      return lang === "pt"
+        ? "Faça seu check-in para receber dicas personalizadas!"
+        : "Complete your check-in for personalized tips!";
+    if (latestCheckIn.sleep_hours < 6)
+      return lang === "pt"
+        ? "Seu sono foi curto. Uma soneca de 20 min à tarde pode ajudar na recuperação."
+        : "Short sleep. A 20-min power nap can boost recovery.";
+    if (latestCheckIn.muscle_soreness >= 4)
+      return lang === "pt"
+        ? "Dores musculares altas. Foco em mobilidade e hidratação hoje."
+        : "High muscle soreness. Focus on mobility and hydration today.";
+    if (latestCheckIn.stress_level >= 4)
+      return lang === "pt"
+        ? "Nível de estresse elevado. Tire 5 minutos para respiração profunda antes do treino."
+        : "High stress. Take 5 mins for deep breathing before training.";
+    if (currentReadiness > 80)
+      return lang === "pt"
+        ? "Você está na sua melhor forma! Dia perfeito para alta intensidade."
+        : "You are in top shape! Perfect day for high intensity.";
+
+    // Sport specific tips
+    if (athleteData?.sport === "Futebol") {
+      return lang === "pt"
+        ? "Dia de treino técnico? Foco no controle de carga excêntrica para proteger seus adutores."
+        : "Technical training day? Focus on eccentric load control to protect your adductors.";
+    }
+    if (athleteData?.sport === "Beach Tennis") {
+      return lang === "pt"
+        ? "A areia exige mais da sua estabilidade. Capriche no aquecimento de tornozelos hoje."
+        : "Sand demands more stability. Warm up your ankles thoroughly today.";
+    }
+
+    return lang === "pt"
+      ? "Recuperação estável. Mantenha o foco na hidratação e boa alimentação."
+      : "Stable recovery. Keep focusing on hydration and nutrition.";
+  };
+
   // Set random quote
   useEffect(() => {
     setMotivationalQuote(
@@ -634,7 +951,6 @@ export function AthleteDashboard({
   // Fetch history and athlete data
   const fetchData = React.useCallback(async () => {
     if (!athleteId || !supabase) {
-      console.warn("fetchData called without athleteId or supabase");
       return;
     }
     
@@ -644,7 +960,7 @@ export function AthleteDashboard({
     setLoadingAthlete(true);
     
     try {
-      console.log("Fetching data for athleteId:", athleteId);
+      console.log("Fetching primary data for athleteId:", athleteId);
       
       // 1. Fetch athlete profile
       const { data: athlete, error: athleteError } = await supabase
@@ -662,18 +978,7 @@ export function AthleteDashboard({
         setAthleteCode(athlete.athlete_code);
       }
 
-      // 2. Check if responded today
-      const today = getLocalDateString();
-      const todayRecord = checkins.find(r => r.record_date === today);
-      if (todayRecord) {
-        setRespondedToday(true);
-        setTodaySummary(todayRecord);
-      } else {
-        setRespondedToday(false);
-        setTodaySummary(null);
-      }
-
-      // 3. Fetch workload data
+      // 2. Fetch workload data
       const { data: loadData } = await supabase
         .from("physical_load_assessments")
         .select("*")
@@ -685,7 +990,31 @@ export function AthleteDashboard({
         setWorkloadData(loadData);
       }
 
-      // 4. Fetch latest pain map (from the most recent record)
+      clearTimeout(timeoutId);
+    } catch (err: any) {
+      console.error("Failed to fetch data in AthleteDashboard:", err);
+    } finally {
+      setLoadingAthlete(false);
+    }
+  }, [athleteId]);
+
+  // Derived checkin data effect
+  useEffect(() => {
+    if (!athleteId || !supabase) return;
+
+    // 1. Check if responded today
+    const today = getLocalDateString();
+    const todayRecord = checkins.find(r => r.record_date === today);
+    if (todayRecord) {
+      setRespondedToday(true);
+      setTodaySummary(todayRecord);
+    } else {
+      setRespondedToday(false);
+      setTodaySummary(null);
+    }
+
+    // 2. Fetch latest pain map (from the most recent record)
+    const fetchPainReport = async () => {
       if (checkins.length > 0) {
         const latestId = checkins[0].id;
         const { data: painData, error: painError } = await supabase
@@ -701,15 +1030,13 @@ export function AthleteDashboard({
           });
           setLatestPainMap(mappedPain);
         }
+      } else {
+        setLatestPainMap({});
       }
+    };
 
-      clearTimeout(timeoutId);
-    } catch (err: any) {
-      console.error("Failed to fetch data in AthleteDashboard:", err);
-    } finally {
-      setLoadingAthlete(false);
-    }
-  }, [athleteId, checkins]);
+    fetchPainReport();
+  }, [checkins, athleteId]);
 
   useEffect(() => {
     fetchData();
@@ -1242,154 +1569,24 @@ export function AthleteDashboard({
 
     if (view === "squad") {
       return (
-        <PageContainer maxWidth="3xl" className="pt-safe">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4 pb-12"
-          >
-            <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 gap-3 w-full">
-              <div className="flex items-center gap-2 w-full sm:w-auto pl-12 sm:pl-0">
-                <Button variant="ghost" size="icon" onClick={() => setView("history")} className="text-slate-400 hover:text-rose-400 mr-1 shrink-0">
-                  <ChevronLeft className="w-5 h-5" />
-                </Button>
-                <h1 className="text-base sm:text-lg font-black text-white tracking-tight uppercase truncate">
-                  Squad <span className={theme.text}>Monitor</span>
-                </h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleLang}
-                  className="text-slate-400 hover:text-white shrink-0 text-[10px] sm:text-xs h-8 px-2"
-                >
-                  <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" />
-                  {lang === "pt" ? "EN" : "PT"}
-                </Button>
-              </div>
-            </div>
-            <SquadOverview />
-          </motion.div>
+        <PageContainer maxWidth="6xl" className="pt-safe">
+          <SquadOverview />
+          <div className="flex justify-center pt-8">
+            <Button
+              variant="outline"
+              onClick={() => setView("history")}
+              className="bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white uppercase tracking-wider font-bold"
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              {lang === "pt" ? "Voltar ao Dashboard" : "Back to Dashboard"}
+            </Button>
+          </div>
         </PageContainer>
       );
     }
 
-    const DecisionEngineCard = () => {
-      if (!engineResult) return null;
-
-      const { readiness, risk, recovery, status, decision, recommendation, alerts, trend } = engineResult;
-
-      const statusColors = {
-        low: "border-emerald-500/30 bg-emerald-500/5",
-        moderate: "border-amber-500/30 bg-amber-500/5",
-        high: "border-rose-500/30 bg-rose-500/5",
-      };
-
-      const decisionColors = {
-        normal: "bg-emerald-500 text-white",
-        adjust: "bg-amber-500 text-black",
-        avoid: "bg-rose-500 text-white",
-      };
-
-      const decisionLabels = {
-        normal: lang === "pt" ? "TREINO NORMAL" : "NORMAL TRAINING",
-        adjust: lang === "pt" ? "AJUSTAR CARGA" : "ADJUST LOAD",
-        avoid: lang === "pt" ? "EVITAR TREINO" : "AVOID TRAINING",
-      };
-
-      return (
-        <Card className={`overflow-hidden border-2 shadow-2xl ${statusColors[status]} transition-all duration-500`}>
-          <CardHeader className="pb-2 border-b border-white/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-indigo-400" />
-                <CardTitle className="text-lg font-black text-white uppercase tracking-tighter">
-                  EARS Decision Engine <span className="text-[10px] text-slate-500 font-mono">v5.0</span>
-                </CardTitle>
-              </div>
-              <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${decisionColors[decision]}`}>
-                {decisionLabels[decision]}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {/* Main Scores */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center space-y-1">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Prontidão</p>
-                <p className={`text-2xl font-black ${readiness > 75 ? 'text-emerald-400' : readiness > 50 ? 'text-amber-400' : 'text-rose-400'}`}>
-                  {readiness}%
-                </p>
-              </div>
-              <div className="text-center space-y-1 border-x border-white/5">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Risco</p>
-                <p className={`text-2xl font-black ${risk < 30 ? 'text-emerald-400' : risk < 60 ? 'text-amber-400' : 'text-rose-400'}`}>
-                  {risk}%
-                </p>
-              </div>
-              <div className="text-center space-y-1">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recovery</p>
-                <p className="text-2xl font-black text-indigo-400">{recovery}%</p>
-              </div>
-            </div>
-
-            {/* Recommendation */}
-            <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
-              <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-lg ${decisionColors[decision]} bg-opacity-20`}>
-                  <Target className={`w-5 h-5 ${decision === 'adjust' ? 'text-amber-400' : decision === 'avoid' ? 'text-rose-400' : 'text-emerald-400'}`} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Conduta Recomendada</p>
-                  <p className="text-sm text-white font-medium leading-relaxed italic">
-                    &quot;{recommendation}&quot;
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Alerts & Trend */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 space-y-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <AlertTriangle className="w-3 h-3" /> Alertas Ativos
-                </p>
-                <div className="space-y-2">
-                  {alerts.length > 0 ? (
-                    alerts.map((alert, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">
-                        <div className="w-1 h-1 rounded-full bg-rose-500" />
-                        {alert}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
-                      Nenhum alerta crítico detectado.
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="sm:w-32 space-y-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tendência</p>
-                <div className={`flex items-center justify-center gap-2 p-3 rounded-xl border ${
-                  trend === 'melhora' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-                  trend === 'queda' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-                  'bg-slate-800 border-slate-700 text-slate-400'
-                }`}>
-                  {trend === 'melhora' ? <TrendingUp className="w-4 h-4" /> : trend === 'queda' ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                  <span className="text-[10px] font-black uppercase">{trend}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    };
-
     if (view === "history") {
-
-    const streak = calculateStreak();
+      const streak = calculateStreak();
     const chartData = checkins
       .slice(0, 15)
       .reverse()
@@ -1617,90 +1814,6 @@ export function AthleteDashboard({
           </div>
         </div>
       );
-    };
-
-    // Gamification & Insights Logic
-    const latestCheckIn = checkins[0];
-    const hasCheckedInToday =
-      latestCheckIn &&
-      parseDateString(latestCheckIn.record_date || latestCheckIn.created_at).toDateString() ===
-        new Date().toDateString();
-    const currentReadiness = latestCheckIn?.readiness_score ?? 0;
-
-    const latestPainMapData = (() => {
-      const raw = latestCheckIn?.soreness_location;
-      if (!raw || raw === 'Nenhuma') return {};
-      
-      // If it's already an object/array (Supabase auto-parsing)
-      if (typeof raw === 'object' && raw !== null) {
-        if (Array.isArray(raw)) {
-          const map: Record<string, any> = {};
-          raw.forEach(item => {
-            map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
-          });
-          return map;
-        }
-        return raw;
-      }
-
-      // If it's a string, try parsing it
-      if (typeof raw === 'string') {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const map: Record<string, any> = {};
-            parsed.forEach(item => {
-              map[item.region] = { level: item.intensity || item.level || 5, type: item.type || 'muscle' };
-            });
-            return map;
-          } else if (typeof parsed === 'object' && parsed !== null) {
-            return parsed;
-          }
-        } catch (e) {
-          // Not JSON, try split
-          const parts = raw.split(',').map((s: string) => s.trim());
-          const map: Record<string, any> = {};
-          parts.forEach((p: string) => {
-            if (p) map[p] = { level: latestCheckIn?.muscle_soreness || 5, type: 'muscle' };
-          });
-          return map;
-        }
-      }
-      return {};
-    })();
-
-    // Use state latestPainMap if local latestPainMapData is empty (fallback)
-    const finalPainMap = Object.keys(latestPainMapData).length > 0 ? latestPainMapData : latestPainMap;
-
-    // Use real data if available, otherwise 0
-    const currentXp = athleteData?.xp || 0;
-    const currentCoins = athleteData?.coins || 0;
-    const athleteLevel = Math.floor(currentXp / 500) + 1;
-
-    const getInsight = () => {
-      if (!latestCheckIn)
-        return lang === "pt"
-          ? "Faça seu check-in para receber dicas personalizadas!"
-          : "Complete your check-in for personalized tips!";
-      if (latestCheckIn.sleep_hours < 6)
-        return lang === "pt"
-          ? "Seu sono foi curto. Uma soneca de 20 min à tarde pode ajudar na recuperação."
-          : "Short sleep. A 20-min power nap can boost recovery.";
-      if (latestCheckIn.muscle_soreness >= 4)
-        return lang === "pt"
-          ? "Dores musculares altas. Foco em mobilidade e hidratação hoje."
-          : "High muscle soreness. Focus on mobility and hydration today.";
-      if (latestCheckIn.stress_level >= 4)
-        return lang === "pt"
-          ? "Nível de estresse elevado. Tire 5 minutos para respiração profunda antes do treino."
-          : "High stress. Take 5 mins for deep breathing before training.";
-      if (currentReadiness > 80)
-        return lang === "pt"
-          ? "Você está na sua melhor forma! Dia perfeito para alta intensidade."
-          : "You are in top shape! Perfect day for high intensity.";
-      return lang === "pt"
-        ? "Recuperação estável. Mantenha o foco na hidratação e boa alimentação."
-        : "Stable recovery. Keep focusing on hydration and nutrition.";
     };
 
     // Generate last 7 days for the weekly tracker
