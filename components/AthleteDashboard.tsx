@@ -151,38 +151,6 @@ const getPainLocationLabel = (id: string): string => {
   return mapping[id.trim().toLowerCase()] || id.trim().replace(/_/g, " ");
 };
 
-const BODY_REGIONS = {
-  knee: { pt: "Joelho", en: "Knee" },
-  shoulder: { pt: "Ombro", en: "Shoulder" },
-  ankle: { pt: "Tornozelo", en: "Ankle" },
-  hip: { pt: "Quadril", en: "Hip" },
-  lumbar: { pt: "Lombar", en: "Lumbar" },
-  neck: { pt: "Cervical", en: "Neck/Cervical" },
-};
-
-const SPORT_PROFILES: Record<string, any> = {
-  futebol: {
-    name: { pt: "Futebol", en: "Soccer" },
-    weights: { knee: 1.5, ankle: 1.4, hip: 1.2, lumbar: 1.1, shoulder: 0.8 }
-  },
-  volei: {
-    name: { pt: "Vôlei", en: "Volleyball" },
-    weights: { shoulder: 1.5, knee: 1.4, ankle: 1.3, lumbar: 1.2, hip: 1.0 }
-  },
-  basquete: {
-    name: { pt: "Basquete", en: "Basketball" },
-    weights: { knee: 1.5, ankle: 1.4, lumbar: 1.2, shoulder: 1.1, hip: 1.1 }
-  },
-  judo: {
-    name: { pt: "Judô", en: "Judo" },
-    weights: { shoulder: 1.5, lumbar: 1.4, knee: 1.3, neck: 1.2, hip: 1.1 }
-  },
-  default: {
-    name: { pt: "Geral", en: "General" },
-    weights: { knee: 1.0, shoulder: 1.0, ankle: 1.0, hip: 1.0, lumbar: 1.0, neck: 1.0 }
-  }
-};
-
 const mapPartToRegion = (partId: string): string | null => {
   const id = partId.toLowerCase();
   if (id.includes('knee')) return 'knee';
@@ -464,9 +432,9 @@ export function AthleteDashboard({
 
   useEffect(() => {
     if (athleteId) {
-      storeFetchCheckins(athleteId);
+      storeFetchCheckins(athleteId, athleteData?.sport);
     }
-  }, [athleteId, storeFetchCheckins]);
+  }, [athleteId, athleteData?.sport, storeFetchCheckins]);
 
   const [lang, setLang] = useState<Language>("pt");
   const [view, setView] = useState<ViewState>("history");
@@ -1138,7 +1106,7 @@ export function AthleteDashboard({
 
       // Refresh history data
       console.log("Refreshing history data after submit...");
-      await storeFetchCheckins(athleteId);
+      await storeFetchCheckins(athleteId, athleteData?.sport);
       await fetchData();
     } catch (error: any) {
       console.error("Error saving to Supabase:", error);
@@ -1304,7 +1272,6 @@ export function AthleteDashboard({
       );
     }
 
-    if (view === "history") {
     const DecisionEngineCard = () => {
       if (!engineResult) return null;
 
@@ -1416,6 +1383,8 @@ export function AthleteDashboard({
         </Card>
       );
     };
+
+    if (view === "history") {
 
     const streak = calculateStreak();
     const chartData = checkins
@@ -2486,7 +2455,7 @@ export function AthleteDashboard({
             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">
               {t[lang].yourAnswers}
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-8">
               {metrics.map((m) => {
                 const val = answers[m.id];
                 const opt = getOptionsForMetric(m.id, lang).find(
@@ -2511,14 +2480,6 @@ export function AthleteDashboard({
                 );
               })}
             </div>
-
-            {/* Manual note if present */}
-            {notes && (
-              <div className="mt-4 p-4 bg-slate-950/50 border border-slate-800/50 rounded-xl">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Sua Observação</p>
-                <p className="text-sm text-slate-300 italic">"{notes}"</p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

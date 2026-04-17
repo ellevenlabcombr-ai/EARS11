@@ -1,4 +1,5 @@
 import { WellnessRecord } from "@/types/database";
+import { SPORT_PROFILES, getSportProfile } from "./sportProfiles";
 
 export type EARSStatus = "low" | "moderate" | "high";
 export type EARSDecision = "normal" | "adjust" | "avoid";
@@ -38,8 +39,47 @@ export const calculateReadiness = (data: Partial<WellnessRecord>) => {
  * Calculates Risk Score (0-100)
  * Lower is better.
  */
-export const calculateRisk = (data: Partial<WellnessRecord>, acwr: number = 1.0) => {
-  const painScore = normalize(data.muscle_soreness || 0, 0, 10);
+export const calculateRisk = (data: Partial<WellnessRecord>, acwr: number = 1.0, sport: string | null = null) => {
+  let painScore = normalize(data.muscle_soreness || 0, 0, 10);
+  
+  // Apply sport-specific weights if pain map is available
+  if (sport && data.soreness_location) {
+    try {
+      const painMap = typeof data.soreness_location === 'string' 
+        ? JSON.parse(data.soreness_location) 
+        : data.soreness_location;
+      
+      if (Array.isArray(painMap) && painMap.length > 0) {
+        const profile = getSportProfile(sport);
+        let weightedSum = 0;
+        let weightCount = 0;
+        
+        painMap.forEach((p: any) => {
+          const regionId = p.region?.toLowerCase();
+          const pLevel = p.intensity || p.level || 0;
+          
+          // Find if this region is a priority for the sport
+          // Mapping local region IDs to priority region IDs might be needed
+          const priority = profile.priorityRegions.find(r => 
+            r.id.toLowerCase().includes(regionId) || regionId.includes(r.id.toLowerCase())
+          );
+          
+          const weight = priority ? (priority.loadLevel === 3 ? 1.5 : priority.loadLevel === 2 ? 1.2 : 1.0) : 1.0;
+          weightedSum += pLevel * weight;
+          weightCount += weight;
+        });
+        
+        if (weightCount > 0) {
+          const avgWeightedPain = weightedSum / weightCount;
+          // Blend general soreness with weighted local pain
+          painScore = (painScore * 0.4) + (normalize(avgWeightedPain, 0, 10) * 0.6);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse pain map for risk calculation", e);
+    }
+  }
+
   const fatigueScore = normalize(data.fatigue_level || 3, 1, 5);
   const sleepDebt = 100 - normalize(data.sleep_quality || 3, 1, 5);
   
@@ -92,10 +132,11 @@ export const calculateTrend = (history: WellnessRecord[]) => {
 export const earsEngine = (
   current: Partial<WellnessRecord>, 
   history: WellnessRecord[] = [],
-  acwr: number = 1.0
+  acwr: number = 1.0,
+  sport: string | null = null
 ): EARSEngineResult => {
   const readiness = calculateReadiness(current);
-  const risk = calculateRisk(current, acwr);
+  const risk = calculateRisk(current, acwr, sport);
   const recovery = calculateRecovery(current);
   const { trend, alert: trendAlert } = calculateTrend(history);
 
@@ -104,6 +145,25 @@ export const earsEngine = (
   if (acwr > 1.5) alerts.push("RISCO ALTO: Sobrecarga aguda detectada (ACWR > 1.5).");
   if (readiness < 50) alerts.push("ALERTA: Prontidão abaixo do limite de segurança.");
   if (trendAlert) alerts.push(trendAlert);
+
+  // Sport-specific alerts
+  if (sport) {
+    const normalizedSport = sport.toLowerCase();
+    if (normalizedSport.includes('judo')) {
+      // Example Judo specific check
+      const painMap = typeof current.soreness_location === 'string' 
+        ? JSON.parse(current.soreness_location) 
+        : current.soreness_location || [];
+      
+      const hasCervicalPain = Array.isArray(painMap) && painMap.some((p: any) => 
+        (p.region?.toLowerCase() === 'cervical' || p.region?.toLowerCase() === 'neck') && p.intensity > 3
+      );
+      
+      if (hasCervicalPain) {
+        alerts.push("ALERTA JUDÔ: Atenção especial à região cervical detectada.");
+      }
+    }
+  }
 
   let status: EARSStatus = "low";
   let decision: EARSDecision = "normal";

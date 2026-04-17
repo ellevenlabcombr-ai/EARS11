@@ -1,4 +1,4 @@
-export type SportType = 'Vôlei' | 'Basquete' | 'Handebol' | 'Futsal' | 'Futebol' | 'Tênis' | 'Judô';
+export type SportType = 'Vôlei' | 'Basquete' | 'Handebol' | 'Futsal' | 'Futebol' | 'Tênis' | 'Judô' | 'Geral';
 
 export interface SportRegionProfile {
   id: string;
@@ -81,5 +81,41 @@ export const SPORT_PROFILES: Record<SportType, SportProfile> = {
       { id: 'hip_l_f', label: 'Quadril (E)', loadLevel: 3 },
       { id: 'foot_r_f', label: 'Tornozelo (D)', loadLevel: 3 }
     ]
+  },
+  'Geral': {
+    name: 'Geral',
+    priorityRegions: [
+      { id: 'knee_r_f', label: 'Joelho (D)', loadLevel: 2 },
+      { id: 'shoulder_r_f', label: 'Ombro (D)', loadLevel: 2 },
+      { id: 'lower_back', label: 'Lombar', loadLevel: 2 }
+    ]
   }
+};
+
+export const getSportProfile = (sportName: string | null | undefined): SportProfile => {
+  if (!sportName) return SPORT_PROFILES['Geral'];
+
+  const normalized = sportName
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // Remove accents
+
+  const mapping: Record<string, SportType> = {
+    'volei': 'Vôlei',
+    'volleyball': 'Vôlei',
+    'basquete': 'Basquete',
+    'basketball': 'Basquete',
+    'handebol': 'Handebol',
+    'handball': 'Handebol',
+    'futsal': 'Futsal',
+    'futebol': 'Futebol',
+    'soccer': 'Futebol',
+    'tenis': 'Tênis',
+    'tennis': 'Tênis',
+    'judo': 'Judô',
+  };
+
+  const matchedType = mapping[normalized];
+  return matchedType ? SPORT_PROFILES[matchedType] : SPORT_PROFILES['Geral'];
 };
